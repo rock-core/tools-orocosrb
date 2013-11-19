@@ -26,7 +26,7 @@ module Orocos
 
         @@transient_port_id_counter = 0
         def self.transient_local_port_name(base_name)
-            "#{base_name}.#{@@transient_port_id_counter += 1}"
+            "#{base_name}[#{@@transient_port_id_counter += 1}]"
         end
 
         @transport_names = Hash.new

@@ -151,7 +151,7 @@ module Orocos
                 self.class.transient_local_port_name(full_name),
                 orocos_type_name,
                 :permanent => false,
-                :class => self.class.writer_class) 
+                :class => self.class.writer_class)
             writer.port = self
             writer.policy = policy
             writer.connect_to(self, policy)
@@ -217,7 +217,7 @@ module Orocos
         def reader(policy = Hash.new)
             ensure_type_available
             reader = Orocos.ruby_task.create_input_port(
-                self.class.transient_local_port_name(full_name),
+                self.class.transient_local_port_name("#{task.name}[#{name}]"),
                 orocos_type_name,
                 :permanent => false,
                 :class => self.class.reader_class)

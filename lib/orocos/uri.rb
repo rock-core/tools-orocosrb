@@ -1,3 +1,5 @@
+require 'uri/generic'
+
 module URI
     class Orocos < URI::Generic
         class << self
@@ -39,7 +41,7 @@ module URI
                 klass = klass_match [1]
                 case klass
                 when "port"
-                    if port_match = klass_match[2].match(/(.*)\.(\w+)$/)
+                    if port_match = klass_match[2].match(/(.*)\.(.*)$/)
                         @task_name, @port_name = port_match[1], port_match[2]
                     else
                         raise ArgumentError, "expected task_name.port_name as path, but got #{klass_match[2]}"
