@@ -1,3 +1,5 @@
+require 'orocos/uri'
+
 module Orocos
     module PortBase
         # The task this port is part of
@@ -15,6 +17,40 @@ module Orocos
         # The port's model as either a Orocos::Generation::InputPort or
         # Orocos::Generation::OutputPort
         attr_reader :model
+
+        # The known connections to orocos.rb, this currently only represents
+        # the state from all connect_to and disconnect calls that going throught
+        # orocos.rb, unexpected disconnects, or c++ connections are unknown here.
+        # it's a Hash[ String: Remote port ] = Connection type
+         def add_connection(remote, policy)
+            metadata do |v|
+                v.add("connections",URI::Orocos.from_port(remote).to_s)
+            end
+         end
+         def remove_connection(remote)
+             t = Array.new
+             uri_string = URI::Orocos.from_port(remote).to_s
+             each_connection do |v|
+                 if(v != uri_string)
+                     t << v
+                 end
+             end
+             metadata do |v|
+                 v.clear("connections")
+                 t.each do |conn|
+                     v.add("connections",conn)
+                 end
+             end
+         end
+
+         def each_connection
+             return []
+             metadata do |m|
+                 m["connections"].each do |v|
+                    yield(v)
+                 end
+             end
+         end
 
         def initialize(task, name, orocos_type_name, model)
             @task = task
@@ -127,6 +163,29 @@ module Orocos
         # will return nil.
         def max_marshalling_size
             Orocos::Spec::OutputPort.compute_max_marshalling_size(type, max_sizes)
+        end
+
+        def metadata
+            list =
+                if self.kind_of?(InputPortBase)
+                    "input_ports"
+                elsif self.kind_of?(OutputPortBase)
+                    "output_ports"
+                else
+                    throw ArgumentError, "Invalid class for returning metadata objects"
+                end
+
+            if(task.metadata == nil)
+               task.metadata = OroGen::MetaData.new
+            end
+            m = task.metadata
+            if(!m.send(list)[name])
+                #needed becasue port access duplicates the object
+                m.send(list)[name] = Typelib::MetaData.new
+            end
+
+            yield(m.send(list)[name])
+            task.metadata = m
         end
     end
 

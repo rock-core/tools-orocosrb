@@ -323,7 +323,14 @@ module Orocos
                 end
                 raise
             end
-                    
+
+            if(!task.metadata)
+                raise ArgumentError, "The Task #{task.name} has no metadata support"
+            else
+                add_connection(input_port,policy)
+                input_port.add_connection(self,policy)
+            end
+
             self
         rescue Orocos::ConnectionFailed => e
             raise e, "failed to connect #{full_name} => #{input_port.full_name} with policy #{policy.inspect}"
@@ -334,6 +341,9 @@ module Orocos
             if !input.respond_to?(:to_orocos_port)
                 return super
             end
+
+            remove_connection(input)
+            input.remove_connection(self)
 
             input = input.to_orocos_port
             refine_exceptions(input) do

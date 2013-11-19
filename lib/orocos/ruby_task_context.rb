@@ -1,3 +1,5 @@
+require 'orogen_metadata'
+
 module Orocos
     # Input port created on a RubyTaskContext task instantiated in this Ruby
     # process
@@ -213,6 +215,9 @@ module Orocos
     #
     # For now, it has very limited functionality: mainly managing ports
     class RubyTaskContext < TaskContext
+        #TODO add the property here, instead of using a member
+        attr_accessor :metadata
+
         # Internal handler used to represent the local RTT::TaskContext object
         #
         # It is created from Ruby as it handles the RTT::TaskContext pointer
@@ -259,6 +264,7 @@ module Orocos
             if options[:model]
                 remote_task.setup_from_orogen_model(options[:model])
             end
+
             remote_task
         end
 
@@ -266,6 +272,11 @@ module Orocos
             @local_ports = Hash.new
             @local_properties = Hash.new
             options, other_options = Kernel.filter_options options, :name => name
+            #TODO add the property here, instead of using a member
+            #create_property("metadata","/metadata/Component")
+            if(self.respond_to?("metadata"))
+               metadata = OroGen::MetaData.new
+            end
             super(ior, other_options.merge(options))
         end
 
