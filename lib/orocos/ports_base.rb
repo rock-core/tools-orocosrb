@@ -28,23 +28,22 @@ module Orocos
             end
          end
          def remove_connection(remote)
-             t = Array.new
-             uri_string = URI::Orocos.from_port(remote).to_s
-             each_connection do |v|
-                 if(v != uri_string)
-                     t << v
-                 end
-             end
-             metadata do |v|
-                 v.clear("connections")
-                 t.each do |conn|
-                     v.add("connections",conn)
-                 end
-             end
+            t = Array.new
+            uri_string = URI::Orocos.from_port(remote).to_s
+            each_connection do |v|
+                if(v != uri_string)
+                    t << v
+                end
+            end
+            metadata do |v|
+                v.clear("connections")
+                t.each do |conn|
+                    v.add("connections",conn)
+                end
+            end
          end
 
          def each_connection
-             return []
              metadata do |m|
                  m["connections"].each do |v|
                     yield(v)
