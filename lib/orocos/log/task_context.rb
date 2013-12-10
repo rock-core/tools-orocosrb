@@ -556,6 +556,10 @@ module Orocos
                 @state_change_blocks << block
             end
 
+            def to_s
+                "#<Orocos::Log::TaskContext: #{name}>"
+            end
+
             def rename(name)
                 @name = name
             end

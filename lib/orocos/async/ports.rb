@@ -37,6 +37,8 @@ module Orocos::Async::CORBA
                 elsif data
                     @raw_last_sample = data
                     event :raw_data, data
+                    # TODO just emit raw_data and convert it to ruby
+                    # if someone is listening to (see PortProxy)
                     event :data, Typelib.to_ruby(data)
                 end
             end
@@ -224,6 +226,7 @@ module Orocos::Async::CORBA
 
         def reader(options = Hash.new,&block)
             options, policy = Kernel.filter_options options, :period => nil
+            policy[:init] = true unless policy.has_key?(:init)
             policy[:pull] = true unless policy.has_key?(:pull)
             if block
                 orig_reader(policy) do |reader,error|

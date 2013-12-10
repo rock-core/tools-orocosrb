@@ -162,6 +162,10 @@ module Orocos::Async
             @raw_last_sample = nil
         end
 
+        def to_s
+            "#<Orocos::Async::PortProxy #{full_name}[#{type.name}]>"
+        end
+
         def type_name
             type.name
         end
@@ -275,15 +279,13 @@ module Orocos::Async
             return super unless listener.use_last_value?
 
             if listener.event == :data
-                sample = raw_last_sample
-                if sample
+                if sample = last_sample
                     event_loop.once do
-                        listener.call Typelib.to_ruby(sample)
+                        listener.call sample
                     end
                 end
             elsif listener.event == :raw_data
-                sample = last_sample
-                if sample
+                if sample = raw_last_sample
                     event_loop.once do
                         listener.call sample
                     end
@@ -293,20 +295,9 @@ module Orocos::Async
         end
 
         def on_data(policy = Hash.new,&block)
-            raise RuntimeError , "Port #{name} is not an output port" if !output?
-            @options = if policy.empty?
-                           @options
-                       elsif @options.empty? && !valid_delegator?
-                           policy
-                       elsif @options == policy
-                           @options
-                       else
-                           Orocos.warn "ProxyPort #{full_name} cannot emit :data with different policies."
-                           Orocos.warn "The current policy is: #{@options}."
-                           Orocos.warn "Ignoring policy: #{policy}."
-                           @options
-                       end
-            on_event :data,&block
+            on_raw_data policy do |sample|
+                yield Typelib::to_ruby(sample,type)
+            end
         end
 
         def on_raw_data(policy = Hash.new,&block)

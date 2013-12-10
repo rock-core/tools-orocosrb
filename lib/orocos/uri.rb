@@ -4,7 +4,7 @@ module URI
     class Orocos < URI::Generic
         class << self
             def from_port(port)
-                hash = {:type_name => port.type.name}
+                hash = {:type_name => port.orocos_type_name}
                 Orocos.new("OROCOS",nil,nil,nil,nil,"/port/#{port.full_name}",nil,to_query(hash),nil)
             end
 

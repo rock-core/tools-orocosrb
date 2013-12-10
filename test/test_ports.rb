@@ -615,5 +615,24 @@ describe Orocos::InputWriter do
             end
         end
     end
+
+    describe "#connect_to" do
+        it "should raise if the provided policy is invalid" do
+            producer = Orocos::RubyTaskContext.new 'producer'
+            out_p = producer.create_output_port 'out', 'double'
+            consumer = Orocos::RubyTaskContext.new 'consumer'
+            in_p = consumer.create_input_port 'in', 'double'
+            assert_raises(ArgumentError) do
+                out_p.connect_to in_p, :type=>:pull,
+                    :init=>false,
+                    :pull=>false,
+                    :data_size=>0,
+                    :size=>0,
+                    :lock=>:lock_free,
+                    :transport=>0,
+                    :name_id=>""
+            end
+        end
+    end
 end
 

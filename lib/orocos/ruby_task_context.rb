@@ -20,6 +20,12 @@ module Orocos
         #   struct.an_array.each do |element|
         #   end
         def read(sample = nil)
+            if value = read_raw(sample)
+                Typelib.to_ruby(sample)
+            end
+        end
+
+        def read_raw(sample = nil)
             if value = read_helper(sample, true)
                 return Typelib.to_ruby(value[0])
             end
@@ -58,6 +64,12 @@ module Orocos
         #   
         # Raises CORBA::ComError if the communication is broken.
         def read_new(sample = nil)
+            if value = read_raw_new(sample)
+                Typelib.to_ruby(value)
+            end
+        end
+
+        def read_raw_new(sample = nil)
             if value = read_helper(sample, false)
                 return Typelib.to_ruby(value[0]) if value[1] == NEW_DATA
             end
@@ -76,6 +88,7 @@ module Orocos
                 value[0] if value[1] == NEW_DATA
             end
         end
+
 
         # Clears the channel, i.e. "forget" that this port ever got written to
         def clear
@@ -339,13 +352,22 @@ module Orocos
         #
         # @param [String] name the property name
         # @param [Model<Typelib::Type>,String] type the type or type name
+        # @option options [Boolean] :init (true) if true, the new property will
+        #   be initialized with a fresh sample. Otherwise, it is left alone. This
+        #   is mostly to avoid crashes / misbehaviours in case smart pointers are
+        #   used
         # @return [Property] the property object
-        def create_property(name, type)
+        def create_property(name, type, options = Hash.new)
+            options = Kernel.validate_options options, :init => true
+
             orocos_type_name = find_orocos_type_name_by_type(type)
             Orocos.load_typekit_for orocos_type_name
             local_property = @local_task.do_create_property(Property, name, orocos_type_name)
             @local_properties[local_property.name] = local_property
             @properties[local_property.name] = local_property
+            if options[:init]
+                local_property.write(local_property.new_sample)
+            end
             local_property
         end
 

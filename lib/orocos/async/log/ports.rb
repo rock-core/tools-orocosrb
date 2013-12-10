@@ -22,6 +22,8 @@ module Orocos::Async::Log
             end
             @port.connect_to do |sample|
                 emit_raw_data @delegator_obj.raw_read
+                # TODO just emit raw_data and convert it to ruby
+                # if someone is listening to (see PortProxy)
                 emit_data sample
             end
         end
@@ -58,7 +60,7 @@ module Orocos::Async::Log
 
     class OutputPort < Orocos::Async::ObjectBase
         extend Utilrb::EventLoop::Forwardable
-        define_event :data
+        define_events :data,:raw_data
         attr_reader :task
 
         def initialize(async_task,port,options=Hash.new)
@@ -72,6 +74,9 @@ module Orocos::Async::Log
                 reachable! port
             end
             port.on_data do |sample,_|
+                emit_raw_data raw_read
+                # TODO just emit raw_data and convert it to ruby
+                # if someone is listening to (see PortProxy)
                 emit_data sample
             end
         end

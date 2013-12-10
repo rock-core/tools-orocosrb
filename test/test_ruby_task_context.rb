@@ -56,12 +56,26 @@ describe Orocos::RubyTaskContext do
         assert_equal 10, in_p.read
     end
 
-    it "can create a property" do
-        task = new_ruby_task_context("task")
-        property = task.create_property('prop', 'int')
-        assert_kind_of Orocos::Property, property
-        assert_same property, task.property('prop')
-        assert task.has_property?('prop')
+    describe "#create_property" do
+        it "can create a property" do
+            task = new_ruby_task_context("task")
+            property = task.create_property('prop', 'int')
+            assert_kind_of Orocos::Property, property
+            assert_same property, task.property('prop')
+            assert task.has_property?('prop')
+        end
+        it "initializes the property with a sample" do
+            Orocos.load_typekit 'echo'
+            opaque_t       = Orocos.registry.get '/OpaquePoint'
+            intermediate_t = Orocos.registry.get '/echo/Point'
+            initial_sample = intermediate_t.new
+            initial_sample.x = 1
+            initial_sample.y = 0
+            flexmock(intermediate_t).should_receive(:new).and_return(initial_sample)
+            task = new_ruby_task_context('task')
+            task.create_property 'p', '/OpaquePoint'
+            assert_equal initial_sample, task.p
+        end
     end
 
     it "can read and write properties" do

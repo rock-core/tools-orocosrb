@@ -228,6 +228,7 @@ module Orocos::Async
             @reconnect = options.delete(:reconnect)
             options[:known_errors].concat([Orocos::ComError,Orocos::NotFound])
             super(name_service,options)
+            @namespace = name_service.namespace
         end
 
         # True if this name service should automatically reconnect

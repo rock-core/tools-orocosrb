@@ -531,6 +531,15 @@ module Orocos
                 end
             end
 
+            def current_time
+                _, time, data = @current_sample
+                return if !time
+                if getter = (timestamps[data.class.name] || default_timestamp)
+                    getter[data]
+                else time
+                end
+            end
+
             def calc_statistics
                 index, time, data = @current_sample
                 if getter = (timestamps[data.class.name] || default_timestamp)
@@ -929,10 +938,19 @@ module Orocos
                         all_files = Dir.enum_for(:glob, File.join(path, '*.*.log'))
                         by_basename = all_files.inject(Hash.new) do |h, path|
                             split = path.match(/^(.*)\.(\d+)\.log$/)
-                            basename, number = split[1], Integer(split[2])
-                            h[basename] ||= Array.new
-                            h[basename][number] = path
-                            h
+                            if split
+                                basename, number = split[1], Integer(split[2])
+                                h[basename] ||= Array.new
+                                h[basename][number] = path
+                                h
+                            else
+                                Orocos.warn "invalid log file name #{path}. Expecting: /^(.*)\.(\d+)\.log$/"
+                                h
+                            end
+                        end
+                        if by_basename.empty?
+                            Orocos.warn "empty directory: #{path}"
+                            next
                         end
 
                         by_basename.each_value do |files|

@@ -36,11 +36,13 @@ static VALUE ros_init(int argc, VALUE* _argv, VALUE mod)
 
     static ros::AsyncSpinner spinner(1); // Use 1 threads
     spinner.start();
+    return Qnil;
 }
 
 static VALUE ros_shutdown()
 {
     ros::shutdown();
+    return Qnil;
 }
 
 void Orocos_init_ROS(VALUE mOrocos, VALUE eComError)

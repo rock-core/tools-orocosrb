@@ -379,14 +379,15 @@ static VALUE port_connected_p(VALUE self)
 static RTT::corba::CConnPolicy policyFromHash(VALUE options)
 {
     RTT::corba::CConnPolicy result;
-    VALUE conn_type = SYM2ID(rb_hash_aref(options, ID2SYM(rb_intern("type"))));
+    VALUE conn_type_value = rb_hash_aref(options, ID2SYM(rb_intern("type")));
+    VALUE conn_type = SYM2ID(conn_type_value);
     if (conn_type == rb_intern("data"))
         result.type = RTT::corba::CData;
     else if (conn_type == rb_intern("buffer"))
         result.type = RTT::corba::CBuffer;
     else
     {
-        VALUE obj_as_str = rb_funcall(conn_type, rb_intern("inspect"), 0);
+        VALUE obj_as_str = rb_funcall(conn_type_value, rb_intern("inspect"), 0);
         rb_raise(rb_eArgError, "invalid connection type %s", StringValuePtr(obj_as_str));
     }
 

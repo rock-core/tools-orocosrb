@@ -2,6 +2,7 @@ $LOAD_PATH.unshift File.join(File.dirname(__FILE__), "..", "lib")
 require 'minitest/spec'
 require 'orocos'
 require 'orocos/test'
+require 'fakefs/safe'
 
 MiniTest::Unit.autorun
 
@@ -472,6 +473,88 @@ describe Orocos::TaskConfigurations do
             assert_raises(ArgumentError) do
                 Orocos::TaskConfigurations.typelib_from_yaml_array(array, [0, 1, 2])
             end
+        end
+    end
+
+    describe "#load_dir" do
+        attr_reader :conf
+        before do
+            FakeFS.activate!
+            @conf = flexmock(Orocos::ConfigurationManager.new)
+        end
+        after do
+            FakeFS.deactivate!
+            FakeFS::FileSystem.clear
+        end
+        it "should raise ArgumentError if the directory does not exist" do
+            assert_raises(ArgumentError) { conf.load_dir "/does/not/exist" }
+        end
+        it "should ignore entries that are not files" do
+            FileUtils.mkdir_p "/conf/entry.yml"
+            conf.should_receive(:load_file).never
+            conf.load_dir "/conf"
+        end
+        it "should ignore entries whose model cannot be found" do
+            FileUtils.mkdir_p "/conf"
+            File.open("/conf/entry.yml", 'w').close
+            conf.should_receive(:load_file).with("/conf/entry.yml").and_raise(Orocos::NotFound)
+            # Should not raise
+            conf.load_dir "/conf"
+        end
+        it "should return a hash from model name to section list if some sections got added or modified" do
+            FileUtils.mkdir_p "/conf"
+            File.open("/conf/first.yml", 'w').close
+            File.open("/conf/second.yml", 'w').close
+            conf.should_receive(:load_file).with("/conf/first.yml").
+                and_return("task::Model" => ['section'])
+            conf.should_receive(:load_file).with("/conf/second.yml").
+                and_return("task::Model" => ['other_section'])
+            # Should not raise
+            assert_equal Hash["task::Model" => ['section', 'other_section']], conf.load_dir("/conf")
+        end
+    end
+
+    describe "#load_file" do
+        attr_reader :conf
+        before do
+            FakeFS.activate!
+            FileUtils.mkdir_p "/conf"
+            @conf = flexmock(Orocos::ConfigurationManager.new)
+        end
+        after do
+            FakeFS.deactivate!
+            FakeFS::FileSystem.clear
+        end
+        it "should raise ArgumentError if the file does not exist" do
+            assert_raises(ArgumentError) { conf.load_file "/does/not/exist" }
+        end
+        it "should allow to specify the model name manually" do
+            File.open("/conf/first.yml", 'w').close
+            conf.load_file "/conf/first.yml", "configurations::Task"
+            flexmock(Orocos).should_receive(:task_model_from_name).with("task::Model").
+                pass_thru
+        end
+        it "should infer the model name if it is not given" do
+            File.open("/conf/configurations::Task.yml", 'w').close
+            conf.load_file "/conf/configurations::Task.yml"
+            flexmock(Orocos).should_receive(:task_model_from_name).with("task::Model").
+                pass_thru
+        end
+        it "should raise Orocos::NotFound if the model does not exist" do
+            File.open("/conf/first.yml", 'w').close
+            assert_raises(Orocos::NotFound) { conf.load_file "/conf/first.yml", "does_not::Exist" }
+        end
+        it "should return false if no sections got added or modified" do
+            File.open("/conf/configurations::Task.yml", 'w').close
+            conf.load_file "/conf/configurations::Task.yml"
+            assert !conf.load_file("/conf/configurations::Task.yml")
+        end
+        it "should return a hash from model name to section list if some sections got added or modified" do
+            File.open("/conf/file.yml", 'w') do |io|
+                io.puts "--- name:test"
+            end
+            assert_equal Hash["configurations::Task" => ["test"]],
+                conf.load_file("/conf/file.yml", "configurations::Task")
         end
     end
 end

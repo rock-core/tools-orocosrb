@@ -26,7 +26,7 @@ sizes = [0, 0]
 Orocos.name_service.names.each do |name|
     result = [name]
     begin
-        task = Orocos::TaskContext.get(name)
+        task = Orocos.name_service.get(name)
         current_state = nil
         10.times do
             if current_state = task.state

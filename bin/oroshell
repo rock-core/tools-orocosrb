@@ -26,7 +26,7 @@ Module.new do
         singleton.class_eval do
             attr_reader var_name
         end
-        instance_variable_set("@#{var_name}", Orocos::TaskContext.get(task_name))
+        instance_variable_set("@#{var_name}", Orocos.name_service.get(task_name))
     end
 
     include Orocos
