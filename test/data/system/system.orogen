@@ -93,10 +93,8 @@ deployment 'system' do
     task "motor_controller", "MotorController"
     task "control", "Control"
     task "imu", 'IMU'
-    task "camera_driver", 'CameraDriver'
     task "firewire_camera", 'FirewireCamera'
     task "prosilica_camera", 'ProsilicaCamera'
-    task "stereo", 'Stereo'
     task "stereo_processing", 'StereoProcessing'
     task "stereo_camera", 'StereoCamera'
     task "dem_builder", 'DemBuilder'

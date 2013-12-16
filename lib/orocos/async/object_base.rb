@@ -388,7 +388,9 @@ module Orocos::Async
         # calls all listener which are registered for the given event
         def process_event(event_name,*args)
             event = validate_event event_name
-            @listeners[event_name].each do |listener|
+            #@listeners have to be cloned because it might get modified 
+            #by listener.call
+            @listeners[event_name].clone.each do |listener|
                 listener.call *args
             end
             self

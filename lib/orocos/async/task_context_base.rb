@@ -378,11 +378,11 @@ module Orocos::Async
             deleted_ports = @port_names - port_names
             deleted_ports.each do |name|
                 @port_names.delete name
-                event :port_unreachable, name
+                process_event :port_unreachable, name
             end
             added_ports.each do |name|
                 @port_names << name
-                event :port_reachable, name
+                process_event :port_reachable, name
             end
         end
 
@@ -396,7 +396,7 @@ module Orocos::Async
             end
             added_properties.each do |name|
                 @property_names << name
-                event :property_reachable, name
+                process_event :property_reachable, name
             end
         end
 
@@ -406,11 +406,11 @@ module Orocos::Async
             deleted_properties = @attribute_names - attribute_names
             deleted_properties.each do |name|
                 @attribute_names.delete name
-                event :attribute_unreachable, name
+                process_event :attribute_unreachable, name
             end
             added_properties.each do |name|
                 @attribute_names << name
-                event :attribute_reachable, name
+                process_event :attribute_reachable, name
             end
         end
 

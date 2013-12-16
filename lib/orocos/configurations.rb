@@ -510,7 +510,8 @@ module Orocos
         # @param [String] file either a file or a directory. If it is a
         #   directory, the generated file will be named based on the task's
         #   model name
-        # @param [String] name the name of the new sectin in the file
+        # @param [String,nil] name the name of the new section. If nil is given,
+        #   defaults to task.name 
         # @return [Hash] the task configuration in YAML representation, as
         #   returned by {.config_as_hash}
         # @see TaskConfigurations#save
@@ -724,16 +725,27 @@ module Orocos
             end
         end
 
-        # Dumps the configuration of +task+ on the specified path
+        # Saves the configuration for a task and dumps it to a YAML file
         #
-        # If +path+ is a directory, the configuration is saved in
-        # a file called project_name::TaskName.yml. Otherwise, it is saved in
-        # the file
+        # This method adds the current configuration of the given task to the
+        # existing configuration(s) for the task's model, and saves all of them
+        # in a YAML file.
         #
-        # If +name+ is given, it is used as the new configuration name.
-        # Otherwise, the task's name is used
+        # @param [TaskContext] task the task whose configuration should be saved
+        # @param [String] path the file or directory it should be saved to.
+        #   If it is a directory, the configuration is saved in a file whose name
+        #   is based on the task's model name (project_name::TaskName.yml).
+        #   Otherwise, it is saved in the file. The directories leading to the
+        #   file must exist.
+        # @option options :model (task.model) the oroGen model used to dump the
+        #   configuration
+        # @option options :name (task.name) the name of the section that should
+        #   be created
+        #
+        # @overload save(task, path, name)
+        #   @deprecated old signature. One should use the option hash now.
         def save(task, path, options = Hash.new)
-            if options.respond_to?(:to_str) # for backward compatibility
+            if options.respond_to?(:to_str) || !options # for backward compatibility
                 options = Hash[:name => options]
             end
             options, find_options = Kernel.filter_options options,

@@ -126,6 +126,11 @@ module Orocos
             #array of stream annotations
             attr_reader :annotations
 
+            # The streams that are actually replayed
+            #
+            # @return [Array<Pocolog::DataStream>]
+            attr_reader :used_streams
+
             # The current annotations
             #
             # This is an aggregated version of #annotations, where the value for
@@ -483,6 +488,19 @@ module Orocos
 
             def aligned?
                 return @stream != nil
+            end
+
+            # The total duration of the replayed data, in seconds
+            #
+            # @return [Float]
+            def duration
+                intervals = used_streams.map { |s| s.info.interval_lg }
+                min = intervals.map(&:first).min
+                max = intervals.map(&:last).max
+                if min && max
+                    max - min
+                else 0
+                end
             end
 
             #Resets the simulated time.

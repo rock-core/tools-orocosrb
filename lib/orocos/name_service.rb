@@ -60,7 +60,7 @@ module Orocos
     end
 
     # (see NameService#get)
-    def self.get(name, options = Hash.new)
+    def self.get(*args)
         Orocos.name_service.get(*args)
     end
 

@@ -40,7 +40,7 @@ begin
 rescue LoadError
     if Orocos::ROS.available?
         Orocos.warn "ROS transport is available, but I cannot load the orogen_ros library, disabling"
-        Orocos::ROS.enabled = false
+        Orocos::ROS.disable
     end
 end
 

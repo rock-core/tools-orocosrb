@@ -21,14 +21,13 @@ module Orocos
         #   end
         def read(sample = nil)
             if value = read_raw(sample)
-                Typelib.to_ruby(sample)
+                Typelib.to_ruby(value)
             end
         end
 
+        # @deprecated use {raw_read} instead
         def read_raw(sample = nil)
-            if value = read_helper(sample, true)
-                return Typelib.to_ruby(value[0])
-            end
+            raw_read(sample)
         end
 
         # Reads a sample on this input port
@@ -69,10 +68,9 @@ module Orocos
             end
         end
 
+        # @deprecated use {raw_read_new} instead
         def read_raw_new(sample = nil)
-            if value = read_helper(sample, false)
-                return Typelib.to_ruby(value[0]) if value[1] == NEW_DATA
-            end
+            raw_read_new(sample)
         end
 
         # Reads a new sample on the associated output port.
@@ -112,7 +110,7 @@ module Orocos
             result = value.allocating_operation do
                 do_read(orocos_type_name, value, copy_old_data)
             end
-            if result == 1 || (result == 0 && copy_old_data)
+            if result == NEW_DATA || (result == OLD_DATA && copy_old_data)
                 if sample
                     sample.invalidate_changes_from_converted_types
                 end

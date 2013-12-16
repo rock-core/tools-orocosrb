@@ -17,3 +17,4 @@ test/roby/*.txt
 *_ui.rb
 doc
 .yardoc
+coverage

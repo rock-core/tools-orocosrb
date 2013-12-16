@@ -24,7 +24,7 @@ describe URI::Orocos do
                 uri = URI::Orocos.from_port(port)
                 assert_equal task.name,uri.task_name
                 assert_equal port.name,uri.port_name
-                assert_equal port.type.name,uri.hash[:type_name]
+                assert_equal port.orocos_type_name,uri.hash[:type_name]
                 assert uri.port_proxy?
                 assert uri.task_proxy?
             end

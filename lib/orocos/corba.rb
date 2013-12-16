@@ -12,7 +12,7 @@ module Orocos
             # The maximum message size, in bytes, allowed by the omniORB. It can
             # only be set before Orocos.initialize is called
             #
-            # Orocos.rb sets it to 4MB by default
+            # orocos.rb sets the default to 4GB (the maximum)
             attr_reader :max_message_size
 
             def max_message_size=(value)
@@ -22,6 +22,16 @@ module Orocos
 
                 ENV['ORBgiopMaxMsgSize'] = value.to_int.to_s
             end
+        end
+
+        # The max message size is a DOS-protection feature. Honestly, given our
+        # usage of CORBA, an attacker would have much worse ways to DOS a Rock
+        # system.
+        #
+        # Since it does get in the way, just set it to the maximum admissible
+        # value
+        if !ENV['ORBgiopMaxMsgSize']
+            self.max_message_size = 1 << 32 - 1
         end
 
         class << self
