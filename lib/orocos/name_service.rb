@@ -166,6 +166,7 @@ module Orocos
         #
         # @yield [TaskContext] code block which is called for each TaskContext
         def each_task
+            return enum_for(__method__) if !block_given?
             names.each do |name|
                 task = begin
                            get(name)
