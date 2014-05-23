@@ -16,5 +16,11 @@
     <depend package="tools/pocolog" optional="1"/>
     <depend package="omniorb" />
     <depend package="tools/rtt_transports/ros" optional="1"/>
+    <depend package="base/orogen/std" />
+
+    <!-- For Orocos::WebAPI -->
+    <depend package="grape" optional="1"/>
+    <depend package="ruby-rack" optional="1"/>
+    <depend package="ruby-rack-test" optional="1"/>
 </package>
 
