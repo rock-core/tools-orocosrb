@@ -56,7 +56,7 @@ module Orocos
                     reader = port.reader
                     (params[:timeout] / params[:poll_period]).ceil.times do
                         if sample = reader.raw_read
-                            return Hash[:sample => sample.to_h]
+                            return Hash[:sample => sample.to_simple_value]
                         end
                         sleep params[:poll_period]
                     end
