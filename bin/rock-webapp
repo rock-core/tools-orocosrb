@@ -4,7 +4,7 @@ require 'eventmachine'
 require 'rack'
 require 'thin'
 require 'orocos'
-require 'orocos/webapi'
+require 'orocos/webapp'
 
 thin_host = '0.0.0.0'
 thin_port = 9292
@@ -28,7 +28,7 @@ Orocos.initialize
 Faye::WebSocket.load_adapter('thin')
 
 thin = Rack::Handler.get('thin')
-app  = Orocos::WebAPI::Root.new
-EM.next_tick { Orocos::WebAPI.install_event_loop }
+app  = Orocos::WebApp::Root.new
+EM.next_tick { Orocos::WebApp.install_event_loop }
 thin.run(app, Host: thin_host, Port: thin_port)
 

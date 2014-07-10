@@ -1,5 +1,5 @@
 module Orocos
-    module WebAPI
+    module WebApp
         class FloatValidator < Grape::Validations::Validator
             def validate_param!(attr_name, params)
             end
@@ -16,13 +16,13 @@ module Orocos
 
                 listener = data_source.on_raw_data do |sample|
                     if !ws.send(MultiJson.dump(sample.to_simple_value))
-                        WebAPI.warn "failed to send, closing connection"
+                        WebApp.warn "failed to send, closing connection"
                         ws.close
                         listener.stop
                     end
                     emitted_samples += 1
                     if emitted_samples == count
-                        WebAPI.debug "reached requested number of samples, closing connection"
+                        WebApp.debug "reached requested number of samples, closing connection"
                         ws.close
                         listener.stop
                     end

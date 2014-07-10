@@ -2,11 +2,11 @@ require 'minitest/spec'
 require 'rack/test'
 require 'orocos'
 require 'orocos/test'
-require 'orocos/webapi'
+require 'orocos/webapp'
 require 'rack'
 require 'minitest/em_sync'
 
-describe Orocos::WebAPI::Tasks do
+describe Orocos::WebApp::Tasks do
     include Orocos::Spec
     include Rack::Test::Methods
 
@@ -18,7 +18,7 @@ describe Orocos::WebAPI::Tasks do
     end
 
     def app
-        @app ||= Orocos::WebAPI::Root.new
+        @app ||= Orocos::WebApp::Root.new
     end
 
     def with_stub_task_context(task_name)
@@ -143,12 +143,12 @@ describe Orocos::WebAPI::Tasks do
                         end
                         Thin::Logging.level = Logger::WARN
                         @thin = Thin::Server.new('localhost', 9292, app)
-                        Orocos::WebAPI.install_event_loop
+                        Orocos::WebApp.install_event_loop
                         @thin.start
                     end
 
                     after do
-                        Orocos::WebAPI.remove_event_loop
+                        Orocos::WebApp.remove_event_loop
                         @thin.stop
                     end
 
