@@ -22,27 +22,30 @@ module Orocos
                 end
 
                 helpers do
-                    def task_by_name(name)
-                        Orocos.name_service.get params[:name]
+                    def task_by_name(name_service, name)
+                        Orocos.name_service.get "#{name_service}/#{name}"
                     rescue Orocos::NotFound
-                        error! "cannot find #{params[:name]} on the registered name services", 404
+                        error! "cannot find #{name_service}/#{name} on the registered name services", 404
                     end
 
-                    def port_by_task_and_name(name, port_name)
-                        task_by_name(name).port(port_name)
+                    def port_by_task_and_name(name_service, name, port_name)
+                        task_by_name(name_service, name).port(port_name)
                     rescue Orocos::NotFound
-                        error! "cannot find port #{port_name} on task #{name}", 404
+                        error! "cannot find port #{port_name} on task #{name_service}/#{name}", 404
                     end
                 end
 
                 desc "Lists information about a given task"
-                get ':name' do
-                    Hash[task: task_by_name(params[:name]).to_h]
+                get ':name_service/:name' do
+                    Hash[task: task_by_name(params[:name_service], params[:name]).to_h]
+                end
+
                 end
 
                 desc "returns information about the given port"
-                get ':name/ports/:port_name' do
-                    Hash[port: port_by_task_and_name(params[:name], params[:port_name]).model.to_h]
+                get ':name_service/:name/ports/:port_name' do
+                    port = port_by_task_and_name(*params.values_at('name_service', 'name', 'port_name'))
+                    Hash[port: port.model.to_h]
                 end
 
                 desc 'read a sample on the given port and returns it'
@@ -50,8 +53,8 @@ module Orocos
                     optional :timeout, type: Float, default: 2.0
                     optional :poll_period, type: Float, default: 0.05
                 end
-                get ':name/ports/:port_name/read' do
-                    port = port_by_task_and_name(params[:name], params[:port_name])
+                get ':name_service/:name/ports/:port_name/read' do
+                    port = port_by_task_and_name(*params.values_at('name_service', 'name', 'port_name'))
 
                     reader = port.reader
                     (params[:timeout] / params[:poll_period]).ceil.times do
