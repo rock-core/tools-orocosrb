@@ -1,0 +1,34 @@
+#! /usr/bin/env ruby
+
+require 'eventmachine'
+require 'rack'
+require 'thin'
+require 'orocos'
+require 'orocos/webapi'
+
+thin_host = '0.0.0.0'
+thin_port = 9292
+name_server_host = 'localhost'
+options = OptionParser.new do |opt|
+    opt.on('--host', String, 'the host of the name server that should be contactea (default to localhost)') do |host|
+        name_server_host = host
+    end
+    opt.on('--bind', String, 'the host the server should bind to (default to 0.0.0.0)') do |host|
+        thin_host = host
+    end
+    opt.on('--port', Integer, "the server's port (default to #{thin_port})") do |port|
+        thin_port = port
+    end
+end
+options.parse ARGV
+
+Orocos::CORBA.name_service.ip = name_server_host
+Orocos.initialize
+
+Faye::WebSocket.load_adapter('thin')
+
+thin = Rack::Handler.get('thin')
+app  = Orocos::WebAPI::Root.new
+EM.next_tick { Orocos::WebAPI.install_event_loop }
+thin.run(app, Host: thin_host, Port: thin_port)
+
