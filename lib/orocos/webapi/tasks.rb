@@ -40,6 +40,11 @@ module Orocos
                     Hash[task: task_by_name(params[:name_service], params[:name]).to_h]
                 end
 
+                desc "Lists all ports of the task"
+                get ':name_service/:name/ports' do
+                    task = task_by_name(params[:name_service], params[:name])
+                    ports = task.each_port.map(&:model)
+                    Hash[ports: ports.map(&:to_h)]
                 end
 
                 desc "returns information about the given port"

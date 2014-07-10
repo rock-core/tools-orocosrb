@@ -71,6 +71,24 @@ describe Orocos::WebAPI::Tasks do
             end
         end
 
+        describe "GET /:namespace/:name/ports" do
+            it "returns a code 404 if the task does not exist" do
+                get "/tasks/localhost/does_not_exist/ports"
+                assert_equal 404, last_response.status
+            end
+
+            it "returns the list of all ports" do
+                with_stub_task_context "task" do |task|
+                    port = task.create_output_port 'port', '/double'
+                    get "/tasks/localhost/task/ports"
+                    assert_equal 200, last_response.status
+                    expected = [Hash[direction: 'output', name: 'port',
+                                    type: {name: '/double', class: 'Typelib::NumericType', size: 8, integer: false}]]
+                    assert_equal Hash[ports: expected], MultiJson.load(last_response.body, symbolize_keys: true)
+                end
+            end
+        end
+
         describe "GET /:namespace/:name/ports/:port" do
             it "returns a code 404 if the task does not exist" do
                 get "/tasks/localhost/does_not_exist/ports/port_does_not_exist"
