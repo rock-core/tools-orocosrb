@@ -8,6 +8,33 @@ module Orocos
             version 'v1', using: :header, vendor: :rock
             format :json
 
+            def self.stream_async_data_to_websocket(env, data_source, count = Float::INFINITY)
+                emitted_samples = 0
+
+                # Asynchronous streaming mode
+                ws = Faye::WebSocket.new(env)
+
+                listener = data_source.on_raw_data do |sample|
+                    if !ws.send(MultiJson.dump(sample.to_simple_value))
+                        WebAPI.warn "failed to send, closing connection"
+                        ws.close
+                        listener.stop
+                    end
+                    emitted_samples += 1
+                    if emitted_samples == count
+                        WebAPI.debug "reached requested number of samples, closing connection"
+                        ws.close
+                        listener.stop
+                    end
+                end
+
+                ws.on :close do |event|
+                    listener.stop
+                end
+
+                ws
+            end
+
             resource :tasks do
                 desc "Lists all tasks that are currently reachable on the name services"
                 params do
@@ -57,18 +84,35 @@ module Orocos
                 params do
                     optional :timeout, type: Float, default: 2.0
                     optional :poll_period, type: Float, default: 0.05
+                    optional :count, type: Integer
                 end
                 get ':name_service/:name/ports/:port_name/read' do
                     port = port_by_task_and_name(*params.values_at('name_service', 'name', 'port_name'))
 
-                    reader = port.reader
-                    (params[:timeout] / params[:poll_period]).ceil.times do
-                        if sample = reader.raw_read
-                            return Hash[:sample => sample.to_simple_value]
+                    if Faye::WebSocket.websocket?(env)
+                        port = port.to_async.reader(init: true, pull: true)
+                        count = params.fetch(:count, Float::INFINITY)
+                        ws = Tasks.stream_async_data_to_websocket(env, port, count)
+
+                        status, response = ws.rack_response
+                        status status
+                        response
+                        
+                    else # Direct polling mode
+                        count = params.fetch(:count, 1)
+                        reader = port.reader(init: true, pull: true)
+                        result = Array.new
+                        (params[:timeout] / params[:poll_period]).ceil.times do
+                            while sample = reader.raw_read_new
+                                result << Hash[:sample => sample.to_simple_value]
+                                if result.size == count
+                                    return result
+                                end
+                            end
+                            sleep params[:poll_period]
                         end
-                        sleep params[:poll_period]
+                        error! "did not get any sample from #{params[:name]}.#{params[:port_name]} in #{params[:timeout]} seconds", 408
                     end
-                    error! "did not get any sample from #{params[:name]}.#{params[:port_name]} in #{params[:timeout]} seconds", 408
                 end
             end
         end

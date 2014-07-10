@@ -1,4 +1,11 @@
+require 'orocos'
+require 'orocos/async'
+
 require 'grape'
+require 'multi_json'
+require 'faye/websocket'
+
+require 'orocos/webapi/event_loop'
 require 'orocos/webapi/tasks'
 
 module Orocos

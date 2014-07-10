@@ -4,6 +4,7 @@ require 'orocos'
 require 'orocos/test'
 require 'orocos/webapi'
 require 'rack'
+require 'minitest/em_sync'
 
 describe Orocos::WebAPI::Tasks do
     include Orocos::Spec
@@ -120,15 +121,49 @@ describe Orocos::WebAPI::Tasks do
                         assert_equal 408, last_response.status
                     end
                 end
-                it "returns the received sample" do
+                it "returns the received sample if called in polling mode" do
                     with_stub_task_context "task" do |task|
                         port = task.create_output_port 'port', '/double'
                         flexmock(Orocos.ruby_task).should_receive(:create_input_port).
-                            and_return(flexmock(:raw_read => flexmock(:to_simple_value => 10.0),
+                            and_return(flexmock(:raw_read_new => flexmock(:to_simple_value => 10.0),
                                 :resolve_connection_from => true, :port= => nil, :policy= => nil))
                         get "/tasks/localhost/task/ports/port/read?timeout=0.05"
                         assert_equal 200, last_response.status
-                        assert_equal Hash[sample: 10], MultiJson.load(last_response.body, symbolize_keys: true)
+                        assert_equal [Hash[sample: 10]], MultiJson.load(last_response.body, symbolize_keys: true)
+                    end
+                end
+
+                describe "streaming" do
+                    include Minitest::EMSync
+
+                    before do
+                        Faye::WebSocket.load_adapter('thin')
+                        EM.add_periodic_timer 0.01 do
+                            Orocos::Async.event_loop.step
+                        end
+                        Thin::Logging.level = Logger::WARN
+                        @thin = Thin::Server.new('localhost', 9292, app)
+                        Orocos::WebAPI.install_event_loop
+                        @thin.start
+                    end
+
+                    after do
+                        Orocos::WebAPI.remove_event_loop
+                        @thin.stop
+                    end
+
+                    it "streams the samples if called with a websocket" do
+                        with_stub_task_context "task" do |task|
+                            port = task.create_output_port 'port', '/double'
+
+                            ws = Faye::WebSocket::Client.new(
+                                "ws://localhost:9292/tasks/localhost/task/ports/port/read?count=2")
+                            d = EM::DefaultDeferrable.new
+                            ws.on(:message) { |msg| d.succeed msg.data }
+                            EM.add_periodic_timer(0.01) { port.write 0 }
+                            EM.add_timer(2) { d.fail }
+                            assert_equal 0, MultiJson.load(sync(d))
+                        end
                     end
                 end
             end
