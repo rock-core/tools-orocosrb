@@ -10,7 +10,7 @@ thin_host = '0.0.0.0'
 thin_port = 9292
 name_server_host = 'localhost'
 options = OptionParser.new do |opt|
-    opt.on('--host', String, 'the host of the name server that should be contactea (default to localhost)') do |host|
+    opt.on('--host', String, 'the host of the name server that should be contacted (default to localhost)') do |host|
         name_server_host = host
     end
     opt.on('--bind', String, 'the host the server should bind to (default to 0.0.0.0)') do |host|
