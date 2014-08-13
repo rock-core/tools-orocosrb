@@ -1,9 +1,5 @@
 module Orocos
     module WebApp
-        class FloatValidator < Grape::Validations::Validator
-            def validate_param!(attr_name, params)
-            end
-        end
         class Tasks < Grape::API
             version 'v1', using: :header, vendor: :rock
             format :json
