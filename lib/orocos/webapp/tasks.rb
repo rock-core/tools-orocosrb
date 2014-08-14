@@ -114,6 +114,18 @@ module Orocos
                         error! "did not get any sample from #{params[:name]}.#{params[:port_name]} in #{params[:timeout]} seconds", 408
                     end
                 end
+                post ':name_service/:name/ports/:port_name/write' do
+                
+                  port = port_by_task_and_name(*params.values_at('name_service', 'name', 'port_name'))
+                  #puts request.params.pretty_inspect
+                
+                  puts request.params["command"]
+                  obj = MultiJson.load(request.params["command"])
+                  puts obj.pretty_inspect
+                
+                  port.write(obj)
+                
+                end
             end
         end
     end
