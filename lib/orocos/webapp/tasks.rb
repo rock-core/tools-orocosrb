@@ -117,12 +117,7 @@ module Orocos
                 post ':name_service/:name/ports/:port_name/write' do
                 
                   port = port_by_task_and_name(*params.values_at('name_service', 'name', 'port_name'))
-                  #puts request.params.pretty_inspect
-                
-                  puts request.params["command"]
-                  obj = MultiJson.load(request.params["command"])
-                  puts obj.pretty_inspect
-                
+                  obj = MultiJson.load(request.params["command"])                
                   port.write(obj)
                 
                 end
