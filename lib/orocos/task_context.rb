@@ -527,9 +527,9 @@ module Orocos
                     port = do_port(name, port_model)
                     port.model ||=
                         if port.kind_of?(OutputPortBase)
-                            model.output_port(port.name, port.type.name)
+                            model.output_port(port.name, port.orocos_type_name)
                         else
-                            model.input_port(port.name, port.type.name)
+                            model.input_port(port.name, port.orocos_type_name)
                         end
                     @ports[name] = port
                 end
