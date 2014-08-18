@@ -11,7 +11,7 @@ module Orocos
                 ws = Faye::WebSocket.new(env)
 
                 listener = data_source.on_raw_data do |sample|
-                    if !ws.send(MultiJson.dump(sample.to_json_value))
+                    if !ws.send(MultiJson.dump(sample.to_json_value(:special_float_values => :string)))
                         WebApp.warn "failed to send, closing connection"
                         ws.close
                         listener.stop
@@ -100,7 +100,7 @@ module Orocos
                         result = Array.new
                         (params[:timeout] / params[:poll_period]).ceil.times do
                             while sample = reader.raw_read_new
-                                result << Hash[:sample => sample.to_json_value]
+                                result << Hash[:sample => sample.to_json_value(:special_float_values => :string)]
                                 if result.size == count
                                     return result
                                 end
