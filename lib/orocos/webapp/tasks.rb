@@ -130,6 +130,15 @@ module Orocos
                     else
                         error! "Only input ports can be written" , 400
                     end
+                    if !port.respond_to?(:writer)
+                            error! "#{port.name} is an input port, cannot read" , 403
+                    end
+                    begin
+                        obj = MultiJson.load(request.params["value"])
+                    rescue MultiJson::ParseError => exception
+                        error! "malformed JSON string", 415
+                    end  
+                    port.write(obj)     
                 end
             end
         end
