@@ -17,5 +17,19 @@
     <depend package="tools/pocolog" optional="1"/>
     <depend package="omniorb" />
     <depend package="tools/rtt_transports/ros" optional="1"/>
+    <depend package="base/orogen/std" />
+
+    <!-- For Orocos::WebApp -->
+    <!--   webserver for rock-webapp -->
+    <depend package="thin" optional="1"/>
+    <depend package="rack" optional="1"/>
+    <depend package="rack-test" optional="1"/>
+    <!--   libraries for the library implementation itself -->
+    <depend package="grape" optional="1"/>
+    <depend package="multi_json" optional="1"/>
+    <depend package="faye-websocket" optional="1"/>
+    <!--   gems required for testing. They are commented out as we don't want
+           everyone to install them -->
+    <!-- gem install rack-test flexmock minitest-em-sync -->
 </package>
 

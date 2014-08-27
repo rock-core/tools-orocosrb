@@ -837,6 +837,14 @@ module Orocos
             end
             super(m.to_sym, *args)
         end
+
+        def to_h
+            Hash[
+                name: name,
+                model: model.to_h,
+                state: state
+            ]
+        end
     end
 
     class << self
