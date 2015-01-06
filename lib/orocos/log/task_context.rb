@@ -545,6 +545,7 @@ module Orocos
             #* file_path => path of the log file
             def initialize(log_replay,task_name,file_path,file_path_config)
                 super(task_name)
+                self.model = Orocos::Spec::TaskContext.new(Orocos.master_project, '')
                 @log_replay = log_replay
                 @invalid_ports = Hash.new # ports that could not be loaded
                 @file_path = file_path
