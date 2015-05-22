@@ -1,6 +1,32 @@
 require 'orocos/test'
 
 describe "reading and writing properties on TaskContext" do
+    describe "#==" do
+        attr_reader :task, :prop
+        before do
+            start 'process::Test' => 'test'
+            @task = get 'test'
+            @prop = task.property('prop1')
+        end
+
+        it "returns true if comparing the same property object" do
+            assert_equal prop, prop
+        end
+        it "returns false for two different properties from the same task" do
+            refute_equal prop, task.property('prop2')
+        end
+        it "returns false for two different properties from two different tasks" do
+            start 'process::Test' => 'other'
+            refute_equal prop, get('other').property('prop2')
+        end
+        it "returns false if compared with an arbitrary object" do
+            refute_equal flexmock, prop
+        end
+        it "returns true for the same property represented from two different objects" do
+            assert_equal prop, get('test').property('prop1')
+        end
+    end
+
     it "should be able to enumerate its properties" do
         start 'process::Test' => 'test'
         t = get 'test'
@@ -95,7 +121,31 @@ describe "reading and writing properties on TaskContext" do
 end
 
 describe "reading and writing attributes on TaskContext" do
-    include Orocos::Spec
+    describe "#==" do
+        attr_reader :task, :prop
+        before do
+            start 'process::Test' => 'test'
+            @task = get 'test'
+            @prop = task.property('prop1')
+        end
+
+        it "returns true if comparing the same property object" do
+            assert_equal prop, prop
+        end
+        it "returns false for two different properties from the same task" do
+            refute_equal prop, task.property('prop2')
+        end
+        it "returns false for two different properties from two different tasks" do
+            start 'process::Test' => 'other'
+            refute_equal prop, get('other').property('prop2')
+        end
+        it "returns false if compared with an arbitrary object" do
+            refute_equal flexmock, prop
+        end
+        it "returns true for the same property represented from two different objects" do
+            assert_equal prop, get('test').property('prop1')
+        end
+    end
 
     it "should be able to enumerate its attributes" do
         Orocos.run('process') do |process|

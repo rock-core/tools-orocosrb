@@ -65,6 +65,7 @@ module Orocos
             @model = task_model
             @sections = Hash.new
             @merged_conf = Hash.new
+            @context = Array.new
         end
 
         # Retrieves the configuration for the given section name 
@@ -155,7 +156,11 @@ module Orocos
 
                 conf_options = options[idx].first
                 name = conf_options.delete('name')
-                if add(name, result || Hash.new, conf_options)
+                changed = in_context("while loading section #{name} of #{file}") do
+                    add(name, result || Hash.new, conf_options)
+                end
+
+                if changed
                     changed_sections << name
                 end
             end
@@ -165,6 +170,81 @@ module Orocos
             changed_sections
         rescue Exception => e
             raise e, "error loading #{file}: #{e.message}", e.backtrace
+        end
+
+        UNITS = Hash[
+            'm' => 1,
+            'N' => 1,
+            'deg' => Math::PI / 180,
+            's' => 1,
+            'g' => 1e-3,
+            'Pa' => 1,
+            'bar' => 100_000]
+        SCALES = Hash[
+            'M' => 1e6,
+            'k' => 1e3,
+            'd' => 1e-1,
+            'c' => 1e-2,
+            'm' => 1e-3,
+            'mu' => 1e-6,
+            'n' => 1e-9,
+            'p' => 1e-12]
+
+        def self.convert_unit_to_SI(expr)
+            unit, power = expr.split('^')
+            power = Integer(power || '1')
+            if unit_to_si = UNITS[unit]
+                return unit_to_si ** power
+            end
+
+            SCALES.each do |prefix, scale|
+                if unit.start_with?(prefix)
+                    if unit_to_si = UNITS[unit[prefix.size..-1]]
+                        return (unit_to_si*scale) ** power
+                    end
+                end
+            end
+            raise ArgumentError, "does not know how to convert #{expr} to SI"
+        end
+
+        ROUNDING_MODES = ['ceil', 'floor', 'round']
+
+        def evaluate_numeric_field(field, field_type)
+            rounding_mode = nil
+            if field.respond_to?(:to_str)
+                # Extract the value first
+                if field =~ /^([+-]?\d+)$/
+                    # This is a plain integer, don't bother and don't annoy the
+                    # user with a float-to-integer rounding mode warning
+                    return Integer(field)
+                elsif field =~ /^([+-]?\d+(?:\.\d+)?(?:e[+-]\d+)?)(.*)/
+                    value, unit = Float($1), $2
+                else
+                    raise ArgumentError, "#{field} does not look like a numeric field"
+                end
+
+                unit = unit.scan(/\.\w+(?:\^-?\d+)?/).inject(1) do |u, unit_expr|
+                    unit_name = unit_expr[1..-1]
+                    if ROUNDING_MODES.include?(unit_name)
+                        rounding_mode = unit_name
+                        u
+                    else
+                        u * TaskConfigurations.convert_unit_to_SI(unit_name)
+                    end
+                end
+                value = value * unit
+            else
+                value = field
+            end
+
+            if value.kind_of?(Float) && field_type.integer?
+                if !rounding_mode
+                    ConfigurationManager.warn "#{current_context} #{field} used for an integer field, but no rounding mode specified. Append one of .round, .floor or .ceil. This defaults to .floor"
+                    rounding_mode = :floor
+                end
+                value.send(rounding_mode)
+            else value
+            end
         end
 
         # Add a new configuration section to the configuration set
@@ -192,6 +272,38 @@ module Orocos
             changed
         end
 
+        # Exception raised when a field in a configuration field cannot be
+        # converted to the requested path
+        class ConversionFailed < ArgumentError
+            # Path to the configuration parameter
+            attr_reader :full_path
+            # The original error
+            attr_reader :original_error
+
+            def initialize(original_error = nil)
+                super()
+                @original_error = original_error
+                @full_path = Array.new
+            end
+        end
+
+        def yaml_value_to_typelib(value, value_t)
+            if value.kind_of?(Hash)
+                config_from_hash(value, value_t)
+            elsif value.respond_to?(:to_ary)
+                config_from_array(value, value_t)
+            else
+                begin
+                    if value_t <= Typelib::NumericType
+                        value = evaluate_numeric_field(value, value_t)
+                    end
+                    Typelib.from_ruby(value, value_t)
+                rescue ArgumentError => e
+                    raise ConversionFailed.new(e), e.message, e.backtrace
+                end
+            end
+        end
+
         # Converts an array to a properly formatted configuration value
         #
         # See {#sections} for a description of configuration value formatting
@@ -201,14 +313,17 @@ module Orocos
         # @return [Object] a properly formatted configuration value based on the
         #   input array
         def config_from_array(array, value_t)
+            if value_t.respond_to?(:length) && value_t.length < array.size
+                raise ConversionFailed, "array too big (got #{array.size} for a maximum of #{value_t.length}"
+            end
+
             element_t = value_t.deference
-            array.map do |value|
-                if value.kind_of?(Hash)
-                    config_from_hash(value, element_t)
-                elsif value.respond_to?(:to_ary)
-                    config_from_array(value, element_t)
-                else
-                    Typelib.from_ruby(value, element_t)
+            array.each_with_index.map do |value, i|
+                begin
+                    yaml_value_to_typelib(value, element_t)
+                rescue ConversionFailed => e
+                    e.full_path.unshift "[#{i}]"
+                    raise e, "failed to convert configuration value for #{e.full_path.join("")}", e.backtrace
                 end
             end
         end
@@ -227,29 +342,30 @@ module Orocos
             result = Hash.new
             hash.each do |key, value|
                 if base
-                    value_t = base[key]
+                    begin
+                        value_t = base[key]
+                    rescue ArgumentError => e
+                        raise ConversionFailed.new(e), e.message, e.backtrace
+                    end
                 else
                     prop = model.find_property(key)
                     if !prop
-                        raise ArgumentError, "#{key} is not a property of #{model.name}"
+                        raise ConversionFailed, "#{key} is not a property of #{model.name}"
                     end
                     value_t = Orocos.typelib_type_for(prop.type)
                 end
 
-                value =
-                    if value.kind_of?(Hash)
-                        config_from_hash(value, value_t)
-                    elsif value.respond_to?(:to_ary)
-                        config_from_array(value, value_t)
-                    else
-			begin
-			    Typelib.from_ruby(value, value_t)
-			rescue Exception => e 
-			    raise ArgumentError, "could not convert value for #{key}. #{e}"
-			end
-                    end
 
-                result[key] = value
+                begin
+                    result[key] = yaml_value_to_typelib(value, value_t)
+                rescue ConversionFailed => e
+                    if base
+                        e.full_path.unshift ".#{key}"
+                    else
+                        e.full_path.unshift "#{key}"
+                    end
+                    raise e, "failed to convert configuration value for #{e.full_path.join("")}", e.backtrace
+                end
             end
             result
         end
@@ -310,6 +426,11 @@ module Orocos
                 end
             end
             result
+        end
+
+        # Tests whether the given section exists
+        def has_section?(name)
+            sections.has_key?(name)
         end
 
         # Returns the task configuration that is the combination of the
@@ -500,6 +621,31 @@ module Orocos
             current_config
         end
 
+        # Specifies a string that describes in which context we are currently
+        # loading, for the benefit of warning and error messages.
+        #
+        # @yield within this block, {#current_context} will return the message
+        #   string
+        #
+        # @param [String] msg the context string
+        # @return [Object] the block's return value
+        def in_context(msg)
+            @context << msg
+            yield
+        ensure
+            @context.pop
+        end
+
+        # Returns a string that describes in which context we are currently
+        # loading, for the benefit of warning and error messages
+        #
+        # @see in_context
+        # @return [String] the current context, or an empty string if none has
+        #   been specified with {#in_context}
+        def current_context
+            @context.last || ''
+        end
+
         # Saves the current configuration of task in a file and updates the
         # section in this object
         #
@@ -507,7 +653,9 @@ module Orocos
         # @return (see TaskConfigurations.save)
         def save(task, file, name)
             config_hash = self.class.save(task, file, name)
-            sections[name] = config_from_hash(config_hash)
+            in_context("while saving section #{name} in #{file} from task #{task.name}(#{task.model.name})") do
+                sections[name] = config_from_hash(config_hash)
+            end
         end
 
         # Saves the current configuration of task in a file
@@ -708,6 +856,9 @@ module Orocos
             options, find_options = Kernel.filter_options options, :override => false, :model_name => task.model.name
 
             model_name = options[:model_name]
+            if model_name.nil?
+                raise ArgumentError, "applying configuration on #{task.name} failed. #{task.class} has no model name."
+            end
             task_conf = find_task_configuration_object(task, find_options.merge(:model_name => model_name))
             if names = resolve_requested_configuration_names(model_name, task_conf, names)
                 ConfigurationManager.info "applying configuration #{names.join(", ")} on #{task.name} of type #{model_name}"
@@ -726,7 +877,7 @@ module Orocos
                     raise ArgumentError, "no configuration available for #{model_name}"
                 end
             end
-            
+
             # If no names are given try to figure them out 
             if !names || names.empty?
                 if(task_conf.sections.size == 1)
@@ -734,7 +885,7 @@ module Orocos
                 else
                     ["default"]
                 end
-            else names
+            else Array(names)
             end
         end
 

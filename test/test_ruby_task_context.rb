@@ -75,6 +75,37 @@ describe Orocos::RubyTasks::TaskContext do
         assert_equal 20, property.read
     end
 
+    describe "#create_attribute" do
+        it "can create a attribute" do
+            task = new_ruby_task_context("task")
+            attribute = task.create_attribute('prop', 'int')
+            assert_kind_of Orocos::Attribute, attribute
+            assert_same attribute, task.attribute('prop')
+            assert task.has_attribute?('prop')
+        end
+        it "initializes the attribute with a sample" do
+            Orocos.load_typekit 'echo'
+            opaque_t       = Orocos.registry.get '/OpaquePoint'
+            intermediate_t = Orocos.registry.get '/echo/Point'
+            initial_sample = intermediate_t.new
+            initial_sample.x = 1
+            initial_sample.y = 0
+            flexmock(intermediate_t).should_receive(:new).and_return(initial_sample)
+            task = new_ruby_task_context('task')
+            task.create_attribute 'p', '/OpaquePoint'
+            assert_equal initial_sample, task.p
+        end
+    end
+
+    it "can read and write attributes" do
+        task = new_ruby_task_context("task")
+        attribute = task.create_attribute('prop', 'int')
+        attribute.write(10)
+        assert_equal 10, attribute.read
+        attribute.write(20)
+        assert_equal 20, attribute.read
+    end
+
     it "allows to get access to the model name if one is given" do
         project = OroGen::Spec::Project.new(Orocos.default_loader)
         model = OroGen::Spec::TaskContext.new(project, 'myModel')

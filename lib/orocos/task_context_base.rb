@@ -37,8 +37,12 @@ module Orocos
             type.name
         end
 
+        def ==(other)
+            name == other.name && task == other.task
+        end
+
         def log_metadata
-            Hash['rock_task_model' => task.model.name,
+            Hash['rock_task_model' => (task.model.name || ''),
                 'rock_task_name' => task.name,
                 'rock_task_object_name' => name,
                 'rock_orocos_type_name' => orocos_type_name]
@@ -215,6 +219,7 @@ module Orocos
                 options = Kernel.validate_options options, :provides => nil
                 return Orocos.name_service.get_provides(options[:provides].to_str)
             else
+                raise ArgumentError, 'no task name' if options.nil?
                 name = options.to_str
             end
             result = Orocos.name_service.get(name,{:process => process})

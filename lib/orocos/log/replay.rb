@@ -357,17 +357,33 @@ module Orocos
                 end
             end
 
-            #returns true if a task with the given name exists
-            def task?(name)
-                name = map_to_namespace name
-                @tasks.has_key?(name)
+            # returns the full name of a task reachable under the given name
+            def full_name(name)
+                # use full name
+                name = name.to_s
+                return name if @tasks.has_key?(name)
+
+                # use namespace of replay
+                name2 = map_to_namespace(name)
+                return name2 if @tasks.has_key?(name2)
+
+                # use all namespaces
+                t = @tasks.find do |key,task|
+                    task.basename == name
+                end
+                t.first if t
             end
 
-            #Returns the simulated task with the given namen. 
+            #returns true if a task with the given name exists
+            def task?(name)
+                !!full_name(name)
+            end
+
+            #Returns the simulated task with the given namen.
             def task(name)
-                name = map_to_namespace name
-                raise "cannot find TaskContext which is called #{name}" if !@tasks.has_key?(name)
-                return @tasks[name]
+                name2 = full_name(name)
+                raise "cannot find TaskContext called #{name}" if !name2
+                return @tasks[name2]
             end
 
             # Aligns all streams which have at least: 
@@ -1034,8 +1050,8 @@ module Orocos
             #This is used to support the syntax.
             #log_replay.task 
             def method_missing(m,*args,&block) #:nodoc:
-                task = @tasks[map_to_namespace(m.to_s)]
-                return task if task
+                task_name = full_name(m)
+                return @tasks[task_name] if task_name
 
                 begin  
                     super(m.to_sym,*args,&block)

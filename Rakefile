@@ -57,7 +57,10 @@ begin
     end
 
     Rake.clear_tasks(/^default$/)
-    task :default => ["compile", "setup:uic"]
+    task 'default' do
+        Rake::Task['clean'].invoke
+        Rake::Task['compile'].invoke
+    end
 
     # Leave in top level namespace to allow rake-compiler to build native gem: 'rake native gem'
     require 'rake/extensiontask'

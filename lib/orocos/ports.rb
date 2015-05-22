@@ -241,7 +241,7 @@ module Orocos
     # This class represents output ports on remote task contexts.
     #
     # They are obtained from TaskContext#port or TaskContext#each_port
-    class InputPort
+    class InputPort < Port
         include InputPortBase
 
         # Used by InputPortWriteAccess to determine which class should be used
@@ -259,7 +259,7 @@ module Orocos
     # This class represents output ports on remote task contexts.
     #
     # They are obtained from TaskContext#port or TaskContext#each_port
-    class OutputPort
+    class OutputPort < Port
         include OutputPortBase
 
         def pretty_print(pp) # :nodoc:

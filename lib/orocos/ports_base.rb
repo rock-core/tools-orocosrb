@@ -56,8 +56,7 @@ module Orocos
         end
 
         def log_metadata
-            task_model_name = task.model ? task.model.name : ""
-            metadata = Hash['rock_task_model' => task_model_name,
+            metadata = Hash['rock_task_model' => (task.model.name || ''),
                 'rock_task_name' => task.name,
                 'rock_task_object_name' => name,
                 'rock_stream_type' => 'port',

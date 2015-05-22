@@ -88,6 +88,7 @@ extern void corba_must_be_initialized();
     catch(CORBA::COMM_FAILURE& e) { this->rb_raise(eCORBAComError, "CORBA communication failure: %s", e.NP_minorString()); } \
     catch(CORBA::TRANSIENT& e) { this->rb_raise(eCORBAComError, "CORBA transient exception: %s", e.NP_minorString()); } \
     catch(CORBA::INV_OBJREF& e) { this->rb_raise(eCORBA, "CORBA invalid obj reference: %s", e.NP_minorString()); } \
+    catch(CORBA::OBJECT_NOT_EXIST& e) { this->rb_raise(eCORBAComError, "CORBA referenced object does not exist: %s", e.NP_minorString()); } \
     catch(CORBA::SystemException& e) { this->rb_raise(eCORBA, "CORBA system exception: %s", e.NP_minorString()); } \
     catch(CORBA::Exception& e) { this->rb_raise(eCORBA, "unspecified error in the CORBA layer: %s", typeid(e).name()); } \
     catch(InvalidIORError &e) { this->rb_raise(rb_eArgError, e.what());}

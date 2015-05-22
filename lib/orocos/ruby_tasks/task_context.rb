@@ -63,6 +63,7 @@ module Orocos
         def initialize(ior, options = Hash.new)
             @local_ports = Hash.new
             @local_properties = Hash.new
+            @local_attributes = Hash.new
             options, other_options = Kernel.filter_options options, :name => name
             super(ior, other_options.merge(options))
         end
@@ -120,6 +121,31 @@ module Orocos
         # to avoid the name clash warning.
         def dispose
             @local_task.dispose
+        end
+
+        # Creates a new attribute on this task context
+        #
+        # @param [String] name the attribute name
+        # @param [Model<Typelib::Type>,String] type the type or type name
+        # @option options [Boolean] :init (true) if true, the new attribute will
+        #   be initialized with a fresh sample. Otherwise, it is left alone. This
+        #   is mostly to avoid crashes / misbehaviours in case smart pointers are
+        #   used
+        # @return [Property] the attribute object
+        def create_attribute(name, type, options = Hash.new)
+            options = Kernel.validate_options options, :init => true
+
+            Orocos.load_typekit_for(type, false)
+            orocos_type_name = Orocos.find_orocos_type_name_by_type(type)
+            Orocos.load_typekit_for(orocos_type_name, true)
+
+            local_attribute = @local_task.do_create_attribute(Attribute, name, orocos_type_name)
+            @local_attributes[local_attribute.name] = local_attribute
+            @attributes[local_attribute.name] = local_attribute
+            if options[:init]
+                local_attribute.write(local_attribute.new_sample)
+            end
+            local_attribute
         end
 
         # Creates a new property on this task context

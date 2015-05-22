@@ -3,8 +3,6 @@ require 'fakefs/safe'
 
 describe Orocos::TaskConfigurations do
     include Orocos::Spec
-    include Orocos::Test::Mocks
-    TaskConfigurations = Orocos::TaskConfigurations
 
     attr_reader :conf
     attr_reader :model
@@ -12,7 +10,7 @@ describe Orocos::TaskConfigurations do
     def setup
         super
         @model = Orocos.default_loader.task_model_from_name('configurations::Task')
-        @conf  = TaskConfigurations.new(model)
+        @conf  = Orocos::TaskConfigurations.new(model)
     end
 
     def verify_loaded_conf(conf, name = nil, *base_path)
@@ -548,10 +546,201 @@ describe Orocos::TaskConfigurations do
                 conf.load_file("/conf/file.yml", "configurations::Task")
         end
     end
+
+    describe "evaluate_numeric_field" do
+        attr_reader :float_t, :int_t
+        before do
+            registry = Typelib::CXXRegistry.new
+            @float_t = registry.get '/float'
+            @int_t   = registry.get '/int'
+        end
+
+        describe "plain values" do
+            it "leaves integer values as-is" do
+                assert_equal 10, conf.evaluate_numeric_field(10, int_t)
+            end
+            it "floors integer types, but issues a warning" do
+                flexmock(Orocos::ConfigurationManager).should_receive(:warn).once
+                assert_equal 9, conf.evaluate_numeric_field(9.7, int_t)
+            end
+            it "leaves floating-point values as-is" do
+                assert_in_delta 9.2, conf.evaluate_numeric_field(9.2, float_t), 0.000001
+            end
+        end
+
+        describe "plain values represented as strings" do
+            it "leaves integer values as-is" do
+                assert_equal 10, conf.evaluate_numeric_field('10', int_t)
+            end
+            it "floors by default for integer types, but emits a warning" do
+                flexmock(Orocos::ConfigurationManager).should_receive(:warn).once
+                assert_equal 9, conf.evaluate_numeric_field('9.7', int_t)
+            end
+            it "allows to specify the rounding mode for integer types" do
+                assert_equal 9, conf.evaluate_numeric_field('9.7.floor', int_t)
+                assert_equal 10, conf.evaluate_numeric_field('9.2.ceil', int_t)
+                assert_equal 10, conf.evaluate_numeric_field('9.7.round', int_t)
+            end
+            it "leaves floating-point values as-is" do
+                assert_in_delta 9.2, conf.evaluate_numeric_field('9.2', float_t), 0.000001
+            end
+            it "handles exponent specifications in floating-point values" do
+                assert_in_delta 9.2e-3, conf.evaluate_numeric_field('9.2e-3', float_t), 0.000001
+            end
+        end
+
+        describe "values with units" do
+            it "converts a plain unit to the corresponding SI representation" do
+                assert_in_delta 10 * Math::PI / 180,
+                    conf.evaluate_numeric_field("10.deg", float_t), 0.0001
+            end
+            it "handles power-of-units" do
+                assert_in_delta 10 * (Math::PI / 180) ** 2,
+                    conf.evaluate_numeric_field("10.deg^2", float_t), 0.0001
+            end
+            it "handles unit scales" do
+                assert_in_delta 10 * 0.001 * (Math::PI / 180),
+                    conf.evaluate_numeric_field("10.mdeg", float_t), 0.0001
+            end
+            it "handles full specifications" do
+                assert_in_delta 10 / (0.001 * Math::PI / 180) ** 2 * 0.01 ** 3,
+                    conf.evaluate_numeric_field("10.mdeg^-2.cm^3", float_t), 0.0001
+            end
+        end
+    end
+
+    describe "yaml_value_to_typelib" do
+        it "maps arrays passing on the deference'd type" do
+            type = Orocos.registry.build('/int[5]')
+            result = conf.yaml_value_to_typelib([1, 2, 3, 4, 5], type)
+            result.each do |v|
+                assert_kind_of type.deference, v
+            end
+            assert_equal [1, 2, 3, 4, 5], Typelib.to_ruby(result)
+        end
+        it "maps hashes passing on the field types" do
+            type = Orocos.registry.create_compound '/Test' do |c|
+                c.add 'f0', '/int'
+                c.add 'f1', '/string'
+            end
+            result = conf.yaml_value_to_typelib(Hash['f0' => 1, 'f1' => 'a_string'], type)
+            result.each do |k, v|
+                assert_kind_of type[k], v
+            end
+            assert_equal Hash['f0' => 1, 'f1' => 'a_string'], Typelib.to_ruby(result)
+        end
+        it "converts numerical values using evaluate_numeric_field" do
+            type = Orocos.registry.get '/int'
+            flexmock(conf).should_receive(:evaluate_numeric_field).with('42', type).and_return(42).once
+            result = conf.yaml_value_to_typelib('42', type)
+            assert_kind_of type, result
+            assert_equal 42, Typelib.to_ruby(result)
+        end
+
+        describe "conversion error handling" do
+            attr_reader :type
+
+            before do
+                registry = Typelib::CXXRegistry.new
+                inner_compound_t = registry.create_compound '/Test' do |c|
+                    c.add 'in_f', '/std/string'
+                end
+                array_t = registry.create_array inner_compound_t, 2
+                @type = registry.create_compound '/OuterTest' do |c|
+                    c.add 'out_f', array_t
+                end
+            end
+
+            it "reports the exact point at which a conversion error occurs" do
+                bad_value = Hash[
+                    'out_f' => Array[
+                        Hash['in_f' => 'string'], Hash['in_f' => 10]
+                    ]
+                ]
+                e = assert_raises(Orocos::TaskConfigurations::ConversionFailed) do
+                    conf.yaml_value_to_typelib(bad_value, type)
+                end
+                assert_equal %w{.out_f [1] .in_f}, e.full_path
+                assert(/\.out_f\[1\]\.in_f/ === e.message)
+            end
+            it "reports the exact point at which an unknown field has been found" do
+                bad_value = Hash[
+                    'out_f' => Array[
+                        Hash['in_f' => 'string'], Hash['f' => 10]
+                    ]
+                ]
+                e = assert_raises(Orocos::TaskConfigurations::ConversionFailed) do
+                    conf.yaml_value_to_typelib(bad_value, type)
+                end
+                assert_equal %w{.out_f [1]}, e.full_path
+                assert(/\.out_f\[1\]/ === e.message)
+            end
+            it "validates array sizes" do
+                bad_value = Hash[
+                    'out_f' => Array[
+                        Hash['in_f' => 'string'], Hash['in_f' => 'blo'], Hash['in_f' => 'bla']
+                    ]
+                ]
+                e = assert_raises(Orocos::TaskConfigurations::ConversionFailed) do
+                    conf.yaml_value_to_typelib(bad_value, type)
+                end
+                assert_equal %w{.out_f}, e.full_path
+                assert(/\.out_f/ === e.message)
+            end
+        end
+    end
+
+    describe ".save" do
+        attr_reader :task
+        before do
+            model = Orocos.default_loader.task_model_from_name('configurations::Task')
+            start 'configurations::Task' => 'task'
+            @task = Orocos.get 'task'
+            # We must load all properties before we activate FakeFS
+            task.each_property do |p|
+                v = p.new_sample
+                v.zero!
+                p.write v
+            end
+            FakeFS.activate!
+        end
+        after do
+            FakeFS.deactivate!
+            FakeFS::FileSystem.clear
+        end
+
+        it "saves the task's configuration file into the specified file and section" do
+            Orocos::TaskConfigurations.save(task, '/conf.yml', 'sec')
+            conf.load_from_yaml '/conf.yml'
+            c = conf.conf(['sec'])
+            task.each_property do |p|
+                expected = p.raw_read
+                value = Typelib.from_ruby(c[p.name], p.type)
+                if expected != value
+                    type_diff(expected, value)
+                end
+                assert(expected == value, "mismatch for #{p.name} (#{p.type.name})")
+            end
+        end
+        it "adds the property's documentation to the saved file" do
+            task.model.find_property('enm').doc('this is a documentation string')
+            Orocos::TaskConfigurations.save(task, '/conf.yml', 'sec')
+            data = File.readlines('/conf.yml')
+            _, idx = data.each_with_index.find { |line| line.strip == "# this is a documentation string" }
+            assert_equal "enm:", data[idx + 1].strip
+        end
+        it "appends the documentation to an existing file" do
+            Orocos::TaskConfigurations.save(task, '/conf.yml', 'first')
+            Orocos::TaskConfigurations.save(task, '/conf.yml', 'second')
+            conf.load_from_yaml '/conf.yml'
+            assert conf.has_section?('first')
+            assert conf.has_section?('second')
+        end
+    end
 end
 
 class TC_Orocos_Configurations < Minitest::Test
-    include Orocos::Test
+    TaskConfigurations = Orocos::TaskConfigurations
 
     def setup
         super
