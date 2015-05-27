@@ -821,7 +821,11 @@ module Orocos
                     return value
                 end
             end
-            super(m.to_sym, *args)
+            begin
+                super(m.to_sym, *args)
+            rescue NoMethodError => e
+                raise $!,"undefined method '#{m}' for #{self}",$!.backtrace
+            end
         end
 
         def to_h
