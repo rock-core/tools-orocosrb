@@ -170,8 +170,8 @@ module Orocos
         end
         ENV['ORO_LOGFILE'] ||= File.expand_path("orocos.#{name || 'orocosrb'}-#{::Process.pid}.txt")
         @orocos_logfile = ENV['ORO_LOGFILE']
+        @conf = ConfigurationManager.new if !@conf
 
-        @conf = ConfigurationManager.new
         @loaded_typekit_plugins.clear
         @max_sizes = Hash.new { |h, k| h[k] = Hash.new }
 
