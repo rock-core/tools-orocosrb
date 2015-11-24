@@ -89,5 +89,26 @@ module Orocos
             Orocos::Async.proxy(name,options)
         end
     end
+
+    module RubyTasks
+        class TaskContext
+            def to_async(options = Hash.new)
+                dispose
+                Async::RubyTasks::TaskContext.new(name,model)
+            end
+        end
+
+        class LocalInputPort
+            def to_async(options = Hash.new)
+                Async::RubyTasks::LocalInputPort.new(self)
+            end
+        end
+
+        class LocalOutputPort
+            def to_async(options = Hash.new)
+                Async::RubyTasks::LocalOutputPort.new(self)
+            end
+        end
+    end
 end
 
