@@ -10,10 +10,10 @@ module Orocos
         options = Kernel.validate_options options, :sleep => 0.1, :display => true, :main => nil
 
         tasks, ports = objects.partition do |obj|
-            obj.kind_of?(TaskContext)
+            obj.respond_to?(:ports)
         end
         ports, readers = ports.partition do |obj|
-            obj.kind_of?(OutputPort)
+            obj.respond_to?(:writer)
         end
 
         tasks = tasks.sort_by { |t| t.name }
