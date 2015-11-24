@@ -452,7 +452,9 @@ module Orocos::Async::CORBA
                     end
                 end
             else
-                raise NotImplementedError, "Async::InputPort#write(sample) not implemented, provide a completion block as e.g. port.write(sample) { }"
+                @global_writer ||= writer(@options)
+                @global_writer.wait  # wait until writer is reachable
+                @global_writer.write(sample)
             end
         end
 
