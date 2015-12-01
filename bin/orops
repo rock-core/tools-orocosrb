@@ -3,6 +3,7 @@
 require 'orocos'
 require 'pp'
 require 'utilrb/pkgconfig'
+require 'optparse'
 
 do_cleanup = false
 parser = OptionParser.new do |opt|
