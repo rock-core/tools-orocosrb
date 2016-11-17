@@ -66,7 +66,7 @@ module Orocos
     #
     # This is shared by local and remote processes alike
     def self.log_all_process_ports(process, tasks: nil, exclude_ports: nil, exclude_types: nil, **logger_options)
-        if !(logger = self.default_logger)
+        if !(logger = process.default_logger)
             return Set.new
         end
 
