@@ -17,6 +17,7 @@
 #include <rtt/transports/corba/TaskContextServer.hpp>
 #include <rtt/transports/corba/CorbaDispatcher.hpp>
 #include "rblocking_call.h"
+#include <boost/lexical_cast.hpp>
 
 #ifdef HAS_GETTID
 #include <sys/syscall.h>
@@ -178,8 +179,8 @@ static VALUE local_task_context_new(VALUE klass, VALUE _name)
 {
     std::string name = StringValuePtr(_name);
     LocalTaskContext* ruby_task = new LocalTaskContext(name);
-    RTT::corba::CorbaDispatcher::Instance(ruby_task->ports(), ORO_SCHED_OTHER, RTT::os::LowestPriority);
 
+    RTT::corba::CorbaDispatcher::Acquire(name + ".CorbaDispatcher." + boost::lexical_cast<std::string>(ruby_task->ports()), ORO_SCHED_OTHER, RTT::os::LowestPriority);
     RTT::corba::TaskContextServer::Create(ruby_task);
 
     VALUE rlocal_task = Data_Wrap_Struct(cLocalTaskContext, 0, delete_local_task_context, new RLocalTaskContext(ruby_task));

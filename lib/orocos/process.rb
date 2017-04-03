@@ -895,7 +895,8 @@ module Orocos
                   prefix: nil, tracing: Orocos.tracing?, name_service: Orocos::CORBA.name_service,
                   wait: nil,
                   output: nil,
-                  gdb: nil, valgrind: nil)
+                  gdb: nil, valgrind: nil,
+                  corba_dispatchers: [])
 
 	    raise "#{name} is already running" if alive?
 	    Orocos.info "starting deployment #{name}"
@@ -926,6 +927,7 @@ module Orocos
             name_mappings.each do |old, new|
                 cmdline_args[:rename].push "#{old}:#{new}"
             end
+            (cmdline_args['corba-dispatcher'] ||= []).concat(corba_dispatchers)
 
             if valgrind
                 cmdline_wrapper = 'valgrind'
