@@ -108,4 +108,16 @@ module Orocos::Async
     def self.thread_pool
         event_loop.thread_pool
     end
+
+    # The default policy used for async readers
+    def self.default_reader_policy
+        @default_reader_policy
+    end
+    @default_reader_policy = Hash[init: true, pull: true]
+
+    # The default policy used for async writers
+    def self.default_writer_policy
+        @default_writer_policy
+    end
+    @default_writer_policy = Hash[]
 end

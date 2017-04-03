@@ -263,8 +263,7 @@ module Orocos::Async::CORBA
 
         def reader(options = Hash.new,&block)
             options, policy = Kernel.filter_options options, :period => nil
-            policy[:init] = true unless policy.has_key?(:init)
-            policy[:pull] = true unless policy.has_key?(:pull)
+            policy = Orocos::Async.default_reader_policy.merge(policy)
             if block
                 orig_reader(policy) do |reader,error|
                     unless error
@@ -402,7 +401,8 @@ module Orocos::Async::CORBA
             @write_blocks = []
         end
 
-        def writer(options = Hash.new,&block)
+        def writer(options = Hash.new, &block)
+            options = Orocos::Async.default_writer_policy.merge(options)
             if block
                 orig_writer(options) do |writer,error|
                     unless error
