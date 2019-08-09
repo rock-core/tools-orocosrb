@@ -98,23 +98,6 @@ module Orocos
 	    result
 	end
 
-        # Stop and restart name server to resolve Orocos::CORBA::ComError
-        # 
-        # @ return [Boolean]
-        def restart_name_server?
-            system("sudo", "/etc/init.d/omniorb4-nameserver", "stop")
-            system("echo", "       Removing /var/lib/omniorb/*")
-            # needs to be a sub shell (exec) due to write-protection
-            # fork is needed to keep the script running after exec execution
-            exec("sudo rm -f /var/lib/omniorb/* && exit") if fork.nil?
-            system("sudo", "/etc/init.d/omniorb4-nameserver", "start")
-            puts "Successfully restarted omniorb4-nameserver"
-            return true
-          raise SystemCallError
-            puts "Restarting omniorb4-nameserver failed"
-            return false
-        end
-
         # Deinitializes the CORBA layer
         #
         # It shuts down the CORBA access and deregisters the Ruby process from
@@ -134,13 +117,12 @@ module Orocos
 
         rescue ComError => e
             if !obj1
-                CORBA.warn "Communication failed with #{obj0}"
-                CORBA.warn "{e.backtrace}\n"
-                puts "Restarting omniorb4 nameserver. Sudo required.."
-                unless restart_name_server?
-                  puts "Try to manually restart the omniorb4 nameserver at /etc/init.d/omniorb4-nameserver"
-                  exit
-                end
+                CORBA.warn "Communication failed with corba #{obj0}"
+                puts "You can fix this by manually restarting the nameserver:"
+                puts "    sudo /etc/init.d/omniorb4-nameserver stop"
+                puts "    sudo rm -f /var/lib/omniorb/*"
+                puts "    sudo /etc/init.d/omniorb4-nameserver start"
+                raise ComError, e.backtrace
             else
                 raise ComError, "communication failed with either #{obj0} or #{obj1}", e.backtrace
             end
