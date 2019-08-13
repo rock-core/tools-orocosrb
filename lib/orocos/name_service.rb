@@ -141,6 +141,11 @@ module Orocos
             validate
             true
         rescue
+            Orocos::CORBA.warn "Name service is unreachable."
+            puts "You can try to fix this manually by restarting the nameserver:"
+            puts "    sudo /etc/init.d/omniorb4-nameserver stop"
+            puts "    sudo rm -f /var/lib/omniorb/*"
+            puts "    sudo /etc/init.d/omniorb4-nameserver start"
             false
         end
 

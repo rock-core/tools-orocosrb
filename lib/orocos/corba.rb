@@ -117,12 +117,7 @@ module Orocos
 
         rescue ComError => e
             if !obj1
-                CORBA.warn "Communication failed with corba #{obj0}"
-                puts "You can fix this by manually restarting the nameserver:"
-                puts "    sudo /etc/init.d/omniorb4-nameserver stop"
-                puts "    sudo rm -f /var/lib/omniorb/*"
-                puts "    sudo /etc/init.d/omniorb4-nameserver start"
-                raise ComError, e.backtrace
+                raise ComError, "Communication failed with corba #{obj0}", e.backtrace
             else
                 raise ComError, "communication failed with either #{obj0} or #{obj1}", e.backtrace
             end
