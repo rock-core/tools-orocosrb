@@ -649,11 +649,11 @@ module Orocos
                         do_validate
                     rescue Orocos::ComError => e
                         CORBA.warn "Name service is unreachable: #{e.message}\n"
-                        puts "You can try to fix this manually by restarting the nameserver:"
-                        puts "    sudo /etc/init.d/omniorb4-nameserver stop"
-                        puts "    sudo rm -f /var/lib/omniorb/*"
-                        puts "    sudo /etc/init.d/omniorb4-nameserver start"
-                        raise Orocos::ComError, e.backtrace
+                        CORBA.warn "You can try to fix this manually by restarting the nameserver:\n"
+                        CORBA.warn "    sudo /etc/init.d/omniorb4-nameserver stop\n"
+                        CORBA.warn "    sudo rm -f /var/lib/omniorb/*\n"
+                        CORBA.warn "    sudo /etc/init.d/omniorb4-nameserver start\n"
+                        raise
                     end
                 end
             end
