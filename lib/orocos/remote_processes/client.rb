@@ -116,6 +116,7 @@ module Orocos
         end
 
         def wait_for_answer(timeout: @response_timeout)
+            puts "WAIT_FOR_ANSWER #{Thread.current}\n  #{caller.join("\n  ")}"
             while true
                 if !select([socket], [], [], timeout)
                     raise TimeoutError, "reached timeout of #{timeout}s in #wait_for_answer"
@@ -133,6 +134,7 @@ module Orocos
         end
 
         def wait_for_ack
+            puts "WAIT_FOR_ACK #{Thread.current}\n  #{caller.join("\n  ")}"
             wait_for_answer do |reply|
                 if reply == RET_YES
                     return true
@@ -210,6 +212,7 @@ module Orocos
         # Returns a hash that maps deployment names to the Process::Status
         # object that represents their exit status.
         def wait_termination(timeout = nil)
+            puts "WAIT TERMINATION #{Thread.current}\n  #{caller.join("\n  ")}"
             if @death_queue.empty?
                 reader = select([socket], nil, nil, timeout)
                 return Hash.new if !reader
@@ -249,6 +252,7 @@ module Orocos
         # The call does not block until the process has quit. You will have to
         # call #wait_termination to wait for the process end.
         def stop(deployment_name, wait)
+            puts "STOP #{deployment_name} #{Thread.current}\n  #{caller.join("\n  ")}"
             socket.write(COMMAND_END)
             Marshal.dump(deployment_name, socket)
             if !wait_for_ack
@@ -261,6 +265,7 @@ module Orocos
         end
 
         def join(deployment_name)
+            puts "JOIN #{deployment_name} #{Thread.current}\n  #{caller.join("\n  ")}"
             process = processes[deployment_name]
             return if !process
 
