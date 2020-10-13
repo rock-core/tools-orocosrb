@@ -225,10 +225,6 @@ module Orocos::Async
             end
         end
 
-        def reachable?
-            super && @delegator_obj.reachable?
-        end
-
         def reachable!(port,options = Hash.new)
             raise ArgumentError, "port must not be kind of PortProxy" if port.is_a? PortProxy
             if @type && @type != port.type && @type.name != port.orocos_type_name
@@ -803,7 +799,7 @@ module Orocos::Async
 
         def reachable?
             @mutex.synchronize do
-                super && @delegator_obj.reachable?
+                super
             end
         rescue Orocos::NotFound => e
             unreachable! :error => e,:reconnect => @options[:reconnect]

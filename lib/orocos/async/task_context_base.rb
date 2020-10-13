@@ -67,12 +67,11 @@ module Orocos::Async
             @attribute_names = Array.new
 
             watchdog_proc = Proc.new do
-                ping # call a method which raises ComError if the connection died
                 # this is used to disconnect the task by an error handler
                 [states,port_names,property_names,attribute_names]
             end
 
-            @watchdog_timer = @event_loop.async_every(watchdog_proc,{:period => default_period,
+            @watchdog_timer = @event_loop.async_every(watchdog_proc,{:period => 5,
                                                       :default => [[],[],[],[]],
                                                       :start => false,
                                                       :sync_key => nil, #is blocked by the methods call ping, states, etc
