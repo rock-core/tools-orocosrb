@@ -130,7 +130,7 @@ module Orocos::Async
                             end
                             def once_on_#{n}(use_last_value = true,&block)
                                 l = on_event #{n.inspect},use_last_value do |*args|
-                                       block.call(*args)
+                                       block.call(*args) if l.listening?
                                        l.stop
                                     end
                             end
