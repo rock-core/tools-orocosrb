@@ -22,6 +22,9 @@
 #include <sys/syscall.h>
 #endif
 
+#include <boost/thread.hpp>
+#include <boost/lexical_cast.hpp>
+
 static VALUE cRubyTaskContext;
 static VALUE cLocalTaskContext;
 static VALUE cLocalOutputPort;
@@ -64,7 +67,14 @@ struct LocalTaskContext : public RTT::TaskContext
 
     boost::int32_t __orogen_getTID() const
     {
+#ifdef __APPLE__
+        std::string thread = boost::lexical_cast<std::string>(boost::this_thread::get_id());
+        unsigned long id= 0;
+        sscanf(thread.c_str(), "%lx", &id);
+        return id;
+#else
         return syscall(SYS_gettid);
+#endif
     }
 
     void report(int state) { _state.write(state); }
