@@ -574,6 +574,11 @@ module Orocos::Async
             wait if wait_for_task == true
         end
 
+        def disconnect
+            @resolve_timer.stop
+            remove_all_listeners
+        end
+
         main_thread_call def property(name, options = Hash.new)
             name = name.to_str
             options,other_options = Kernel.filter_options options, wait: @options[:wait]
