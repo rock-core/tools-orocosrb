@@ -105,11 +105,13 @@ describe Orocos::Port do
         describe "validation of message size" do
             it "initializes data_size by the value returned by #max_marshalling_size f data_size is zero" do
                 flexmock(port).should_receive(:max_marshalling_size).and_return(10)
+                flexmock(Orocos::MQueue).should_receive(:validate_sizes?).and_return(false)
                 assert_equal Hash[transport: Orocos::TRANSPORT_MQ, size: 42, data_size: 10],
                     port.handle_mq_transport("input", transport: 0, size: 42, data_size: 0)
             end
             it "initializes data_size by the value returned by #max_marshalling_size f data_size is not given" do
                 flexmock(port).should_receive(:max_marshalling_size).and_return(10)
+                flexmock(Orocos::MQueue).should_receive(:validate_sizes?).and_return(false)
                 assert_equal Hash[transport: Orocos::TRANSPORT_MQ, size: 42, data_size: 10],
                     port.handle_mq_transport("input", transport: 0, size: 42)
             end

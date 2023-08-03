@@ -150,10 +150,13 @@ describe "reading and writing attributes on TaskContext" do
     it "should be able to enumerate its attributes" do
         Orocos.run('process') do |process|
             t = process.task('Test')
-            assert_equal %w{att1 att2 att3}, t.attribute_names.sort
-            assert_equal %w{att1 att2 att3}, t.each_attribute.map(&:name).sort
-            %w{att1 att2 att3}.each do |name|
-                t.has_attribute?(name)
+            usual_attributes =
+                %w[CycleCounter IOCounter TimeOutCounter TriggerCounter TriggerOnStart]
+            task_attributes = %w[att1 att2 att3]
+            expectation = usual_attributes + task_attributes
+            assert_equal expectation, t.attribute_names.sort
+            expectation.each do |name|
+                assert t.has_attribute?(name)
             end
         end
     end

@@ -10,14 +10,14 @@ describe Orocos::OutputReader do
     include Orocos::Spec
 
     it "should not be possible to create an instance directly" do
-	assert_raises(NoMethodError) { Orocos::OutputReader.new }
+        assert_raises(NoMethodError) { Orocos::OutputReader.new }
     end
 
     it "should offer read access on an output port" do
         Orocos.run('simple_source') do |source|
             source = source.task('source')
             output = source.port('cycle')
-            
+
             # Create a new reader. The default policy is data
             reader = output.reader
             assert(reader.kind_of?(Orocos::OutputReader))
@@ -35,7 +35,7 @@ describe Orocos::OutputReader do
             source.write_opaque(42)
 
             sleep(0.2)
-            
+
             # Create a new reader. The default policy is data
             sample = reader.read
             assert_equal(42, sample.x)
@@ -53,7 +53,7 @@ describe Orocos::OutputReader do
             source.write_opaque(42)
 
             sleep(0.2)
-            
+
             # Create a new reader. The default policy is data
             sample = output.new_sample
             returned_sample = reader.read(sample)
@@ -69,7 +69,7 @@ describe Orocos::OutputReader do
             output = source.port('cycle')
             source.configure
             source.start
-            
+
             # The default policy is data
             reader = output.reader
             sleep(0.2)
@@ -135,20 +135,20 @@ describe Orocos::OutputReader do
         end
     end
 
-    it "should raise ComError if the remote end is dead and be disconnected" do
-	Orocos.run 'simple_source' do |source_p|
-            source = source_p.task('source')
-            output = source.port('cycle')
+    it "does not raise if the remote end is dead, but is disconnected" do
+        Orocos.run "simple_source" do |source_p|
+            source = source_p.task("source")
+            output = source.port("cycle")
             reader = output.reader
             source.configure
             source.start
             sleep(0.5)
 
-            source_p.kill(true, 'KILL')
+            source_p.kill(true, "KILL")
 
-	    assert_raises(Orocos::CORBA::ComError) { reader.read }
-	    assert(!reader.connected?)
-	end
+            reader.read # should not raise
+            refute reader.connected?
+        end
     end
 
     it "should get an initial value when :init is specified" do

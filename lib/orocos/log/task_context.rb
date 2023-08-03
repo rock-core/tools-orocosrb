@@ -500,7 +500,7 @@ module Orocos
 
             #Returns a new sample object
             def new_sample
-                @type.new
+                @type.zero
             end
 
             #Clears all reader buffers
@@ -596,7 +596,7 @@ module Orocos
             end
 
             def new_sample
-                type.new
+                type.zero
             end
 
             def orocos_type_name
