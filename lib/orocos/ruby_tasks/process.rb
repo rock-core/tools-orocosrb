@@ -74,13 +74,15 @@ module Orocos
         # Deploys the tasks defined in {model} as ruby tasks
         #
         # @return [void]
-        def spawn(options = Hash.new)
+        def spawn(register_on_name_server: true, **options)
             model.task_activities.each do |deployed_task|
                 name = get_mapped_name(deployed_task.name)
                 Orocos.allow_blocking_calls do
                     deployed_tasks[name] =
-                        task_context_class.from_orogen_model(name,
-                                                             deployed_task.task_model)
+                        task_context_class.from_orogen_model(
+                            name, deployed_task.task_model,
+                            register_on_name_server: register_on_name_server
+                        )
                 end
             end
             @alive = true

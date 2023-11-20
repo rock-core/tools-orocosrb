@@ -38,7 +38,7 @@ struct LocalTaskContext : public RTT::TaskContext
     { return model_name; }
     void setModelName(std::string const& value)
     { model_name = value; }
-    
+
     LocalTaskContext(std::string const& name)
         : RTT::TaskContext(name, TaskCore::PreOperational)
         , _getModelName("getModelName", &LocalTaskContext::getModelName, this, RTT::ClientThread)
@@ -57,7 +57,7 @@ struct LocalTaskContext : public RTT::TaskContext
         _state.keepLastWrittenValue(false);
         _state.keepNextWrittenValue(true);
         ports()->addPort(_state);
-        
+
         _state.keepLastWrittenValue(true);
         _state.write(getTaskState());
     }
@@ -174,7 +174,7 @@ static void delete_local_task_context(RLocalTaskContext* rtask)
     local_task_context_dispose(rtask);
 }
 
-static VALUE local_task_context_new(VALUE klass, VALUE _name)
+static VALUE local_task_context_new(VALUE klass, VALUE _name, VALUE use_naming)
 {
     std::string name = StringValuePtr(_name);
     LocalTaskContext* ruby_task = new LocalTaskContext(name);
@@ -185,7 +185,7 @@ static VALUE local_task_context_new(VALUE klass, VALUE _name)
     RTT::corba::CorbaDispatcher::Instance(ruby_task->ports(), ORO_SCHED_OTHER, RTT::os::LowestPriority);
 #endif
 
-    RTT::corba::TaskContextServer::Create(ruby_task);
+    RTT::corba::TaskContextServer::Create(ruby_task, RTEST(use_naming));
 
     VALUE rlocal_task = Data_Wrap_Struct(cLocalTaskContext, 0, delete_local_task_context, new RLocalTaskContext(ruby_task));
     rb_obj_call_init(rlocal_task, 1, &_name);
@@ -449,7 +449,7 @@ void Orocos_init_ruby_task_context(VALUE mOrocos, VALUE cTaskContext, VALUE cOut
     VALUE mRubyTasks = rb_define_module_under(mOrocos, "RubyTasks");
     cRubyTaskContext = rb_define_class_under(mRubyTasks, "TaskContext", cTaskContext);
     cLocalTaskContext = rb_define_class_under(cRubyTaskContext, "LocalTaskContext", rb_cObject);
-    rb_define_singleton_method(cLocalTaskContext, "new", RUBY_METHOD_FUNC(local_task_context_new), 1);
+    rb_define_singleton_method(cLocalTaskContext, "new", RUBY_METHOD_FUNC(local_task_context_new), 2);
     rb_define_method(cLocalTaskContext, "dispose", RUBY_METHOD_FUNC(static_cast<VALUE(*)(VALUE)>(local_task_context_dispose)), 0);
     rb_define_method(cLocalTaskContext, "ior", RUBY_METHOD_FUNC(local_task_context_ior), 0);
     rb_define_method(cLocalTaskContext, "model_name=", RUBY_METHOD_FUNC(local_task_context_set_model_name), 1);

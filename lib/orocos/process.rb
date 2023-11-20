@@ -1083,7 +1083,8 @@ module Orocos
             wait: nil,
             output: nil,
             gdb: nil, valgrind: nil,
-            name_service: Orocos::CORBA.name_service
+            name_service: Orocos::CORBA.name_service,
+            register_on_name_server: true
         )
 
             raise "#{name} is already running" if alive?
@@ -1189,6 +1190,10 @@ module Orocos
 
                 if output_file_name && valgrind
                     cmdline.unshift "--log-file=#{output_file_name}.valgrind"
+                end
+
+                unless register_on_name_server
+                    cmdline << "--register-on-name-server" << "0"
                 end
 
                 if cmdline_wrapper
