@@ -22,8 +22,8 @@ module Orocos
         # Creates a new local task context that fits the given oroGen model
         #
         # @return [TaskContext]
-        def self.from_orogen_model(name, orogen_model)
-            new(name, model: orogen_model)
+        def self.from_orogen_model(name, orogen_model, **options)
+            new(name, model: orogen_model, **options)
         end
 
         # Creates a new ruby task context with the given name
@@ -31,15 +31,17 @@ module Orocos
         # @param [String] name the task name
         # @return [TaskContext]
         def self.new(
-            name, project: OroGen::Spec::Project.new(Orocos.default_loader),
-            model: nil, **options, &block
+            name,
+            project: OroGen::Spec::Project.new(Orocos.default_loader),
+            model: nil, register_on_name_server: true,
+            **options, &block
         )
             if block && !model
                 model = OroGen::Spec::TaskContext.new(project, name)
                 model.instance_eval(&block)
             end
 
-            local_task = LocalTaskContext.new(name)
+            local_task = LocalTaskContext.new(name, register_on_name_server)
             local_task.model_name = model.name if model&.name
 
             remote_task = super(local_task.ior, name: name, model: model, **options)
