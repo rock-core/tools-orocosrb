@@ -262,7 +262,11 @@ module Orocos
     # a RuntimeError exception whose message will describe the particular
     # problem. See the "Error messages" package in the user's guide for more
     # information on how to fix those.
-    def self.initialize(name = "orocosrb_#{::Process.pid}")
+    def self.initialize(
+        name = "orocosrb_#{::Process.pid}",
+        register_on_name_server: true,
+        default_corba_name_server: true
+    )
         self.load(name) unless loaded?
 
         Orocos.update_typekit_main_thread
@@ -282,7 +286,9 @@ module Orocos
             end
         end
 
-        Orocos::CORBA.initialize unless Orocos::CORBA.initialized?
+        unless Orocos::CORBA.initialized?
+            Orocos::CORBA.initialize(default_name_server: default_corba_name_server)
+        end
         @initialized = true
 
         if Orocos::ROS.enabled?
@@ -293,16 +299,23 @@ module Orocos
         end
 
         # add default name services
-        self.name_service << Orocos::CORBA.name_service
+        if default_corba_name_server
+            self.name_service << Orocos::CORBA.name_service
+        end
+
         if defined?(Orocos::ROS) && Orocos::ROS.enabled?
             self.name_service << Orocos::ROS.name_service
         end
+
         if defined?(Orocos::Async)
             Orocos.name_service.name_services.each do |ns|
                 Orocos::Async.name_service.add(ns)
             end
         end
-        @ruby_task = RubyTasks::TaskContext.new(name)
+
+        @ruby_task = RubyTasks::TaskContext.new(
+            name, register_on_name_server: register_on_name_server
+        )
     end
 
     def self.create_orogen_task_context_model(name = nil)
