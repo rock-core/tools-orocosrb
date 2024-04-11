@@ -239,7 +239,11 @@ module Orocos
                     cache_id, cached_yaml = read_yaml_from_cache(cache_dir, doc)
                 end
                 unless cached_yaml
-                    loaded_yaml = YAML.load(StringIO.new(doc)) || Hash.new
+                    begin
+                        loaded_yaml = YAML.load(StringIO.new(doc)) || Hash.new
+                    rescue Psych::SyntaxError => e
+                        raise e, "#{e.message} while loading section #{conf_options[:name]}", e.backtrace
+                    end
                 end
 
                 begin
