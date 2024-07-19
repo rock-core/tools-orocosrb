@@ -7,6 +7,8 @@
 #include <rtt/transports/corba/TransportPlugin.hpp>
 #include <rtt/internal/ConnFactory.hpp>
 
+#include <rtt/deployment/ComponentLoader.hpp>
+
 #include <rtt/OutputPort.hpp>
 #include <rtt/base/InputPortInterface.hpp>
 
@@ -24,10 +26,12 @@
 
 static VALUE cRubyTaskContext;
 static VALUE cLocalRubyTaskContext;
+static VALUE cLocalTaskContext;
+static VALUE cComponentLoader;
 static VALUE cLocalOutputPort;
 static VALUE cLocalInputPort;
 
-struct LocalTaskContext : public RTT::TaskContext
+struct LocalRubyTaskContext : public RTT::TaskContext
 {
     std::string model_name;
 
@@ -39,10 +43,10 @@ struct LocalTaskContext : public RTT::TaskContext
     void setModelName(std::string const& value)
     { model_name = value; }
 
-    LocalTaskContext(std::string const& name)
+    LocalRubyTaskContext(std::string const& name)
         : RTT::TaskContext(name, TaskCore::PreOperational)
-        , _getModelName("getModelName", &LocalTaskContext::getModelName, this, RTT::ClientThread)
-        , ___orogen_getTID("__orogen_getTID", &LocalTaskContext::__orogen_getTID, this, RTT::OwnThread)
+        , _getModelName("getModelName", &LocalRubyTaskContext::getModelName, this, RTT::ClientThread)
+        , ___orogen_getTID("__orogen_getTID", &LocalRubyTaskContext::__orogen_getTID, this, RTT::OwnThread)
         , _state("state")
     {
         setupComponentInterface();
@@ -132,25 +136,30 @@ struct LocalTaskContext : public RTT::TaskContext
 
 struct RLocalTaskContext
 {
-    LocalTaskContext* tc;
-    RLocalTaskContext(LocalTaskContext* tc)
+    RTT::TaskContext* tc;
+    RLocalTaskContext(RTT::TaskContext* tc)
         : tc(tc) {}
 };
 
-LocalTaskContext& local_ruby_task_context(VALUE obj)
+RTT::TaskContext& local_task_context(VALUE obj)
 {
-    LocalTaskContext* tc = get_wrapped<RLocalTaskContext>(obj).tc;
+    RTT::TaskContext* tc = get_wrapped<RLocalTaskContext>(obj).tc;
     if (!tc)
         rb_raise(rb_eArgError, "accessing a disposed task context");
     return *tc;
 }
 
-static void local_ruby_task_context_dispose(RLocalTaskContext* rtask)
+LocalRubyTaskContext& local_ruby_task_context(VALUE obj)
+{
+    return dynamic_cast<LocalRubyTaskContext&>(local_task_context(obj));
+}
+
+static void local_task_context_dispose_internal(RLocalTaskContext* rtask)
 {
     if (!rtask->tc)
         return;
 
-    LocalTaskContext* task = rtask->tc;
+    RTT::TaskContext* task = rtask->tc;
 
     // Ruby GC does not give any guarantee about the ordering of garbage
     // collection. Reset the dataflowinterface to NULL on all ports so that
@@ -168,16 +177,16 @@ static void local_ruby_task_context_dispose(RLocalTaskContext* rtask)
     rtask->tc = 0;
 }
 
-static void delete_local_ruby_task_context(RLocalTaskContext* rtask)
+static void delete_local_task_context(RLocalTaskContext* rtask)
 {
     std::auto_ptr<RLocalTaskContext> guard(rtask);
-    local_ruby_task_context_dispose(rtask);
+    local_task_context_dispose_internal(rtask);
 }
 
 static VALUE local_ruby_task_context_new(VALUE klass, VALUE _name, VALUE use_naming)
 {
     std::string name = StringValuePtr(_name);
-    LocalTaskContext* ruby_task = new LocalTaskContext(name);
+    LocalRubyTaskContext* ruby_task = new LocalRubyTaskContext(name);
 #if RTT_VERSION_GTE(2,8,99)
     ruby_task->addConstant<int>("CorbaDispatcherScheduler", ORO_SCHED_OTHER);
     ruby_task->addConstant<int>("CorbaDispatcherPriority", RTT::os::LowestPriority);
@@ -187,21 +196,21 @@ static VALUE local_ruby_task_context_new(VALUE klass, VALUE _name, VALUE use_nam
 
     RTT::corba::TaskContextServer::Create(ruby_task, RTEST(use_naming));
 
-    VALUE rlocal_ruby_task = Data_Wrap_Struct(cLocalRubyTaskContext, 0, delete_local_ruby_task_context, new RLocalTaskContext(ruby_task));
+    VALUE rlocal_ruby_task = Data_Wrap_Struct(cLocalRubyTaskContext, 0, delete_local_task_context, new RLocalTaskContext(ruby_task));
     rb_obj_call_init(rlocal_ruby_task, 1, &_name);
     return rlocal_ruby_task;
 }
 
-static VALUE local_ruby_task_context_dispose(VALUE obj)
+static VALUE local_task_context_dispose(VALUE obj)
 {
     RLocalTaskContext& task = get_wrapped<RLocalTaskContext>(obj);
-    local_ruby_task_context_dispose(&task);
+    local_task_context_dispose_internal(&task);
     return Qnil;
 }
 
-static VALUE local_ruby_task_context_ior(VALUE _task)
+static VALUE local_task_context_ior(VALUE _task)
 {
-    LocalTaskContext& task = local_ruby_task_context(_task);
+    RTT::TaskContext& task = local_task_context(_task);
     std::string ior = RTT::corba::TaskContextServer::getIOR(&task);
     return rb_str_new(ior.c_str(), ior.length());
 }
@@ -262,7 +271,7 @@ static VALUE local_ruby_task_context_create_port(VALUE _task, VALUE _is_output, 
         port = factory->inputPort(port_name);
 
     ruby_port = Data_Wrap_Struct(_klass, 0, delete_rtt_ruby_port, port);
-    local_ruby_task_context(_task).ports()->addPort(*port);
+    local_task_context(_task).ports()->addPort(*port);
 
     VALUE args[4] = { rb_iv_get(_task, "@remote_task"), _port_name, _type_name, Qnil };
     rb_obj_call_init(ruby_port, 4, args);
@@ -272,7 +281,7 @@ static VALUE local_ruby_task_context_create_port(VALUE _task, VALUE _is_output, 
 static VALUE local_ruby_task_context_remove_port(VALUE obj, VALUE _port_name)
 {
     std::string port_name = StringValuePtr(_port_name);
-    LocalTaskContext& task(local_ruby_task_context(obj));
+    LocalRubyTaskContext& task(local_ruby_task_context(obj));
     RTT::DataFlowInterface& di(*task.ports());
     RTT::base::PortInterface* port = di.getPort(port_name);
     if (!port)
@@ -302,7 +311,7 @@ static VALUE local_ruby_task_context_create_property(VALUE _task, VALUE _klass, 
 
     RTT::base::PropertyBase* property = factory->buildProperty(property_name, "");
     VALUE ruby_property = Data_Wrap_Struct(_klass, 0, delete_rtt_ruby_property, property);
-    local_ruby_task_context(_task).addProperty(*property);
+    local_task_context(_task).addProperty(*property);
 
     VALUE args[4] = { rb_iv_get(_task, "@remote_task"), _property_name, _type_name };
     rb_obj_call_init(ruby_property, 3, args);
@@ -327,7 +336,7 @@ static VALUE local_ruby_task_context_create_attribute(VALUE _task, VALUE _klass,
 
     RTT::base::AttributeBase* attribute = factory->buildAttribute(attribute_name);
     VALUE ruby_attribute = Data_Wrap_Struct(_klass, 0, delete_rtt_ruby_attribute, attribute);
-    local_ruby_task_context(_task).addAttribute(*attribute);
+    local_task_context(_task).addAttribute(*attribute);
 
     VALUE args[4] = { rb_iv_get(_task, "@remote_task"), _attribute_name, _type_name };
     rb_obj_call_init(ruby_attribute, 3, args);
@@ -444,20 +453,80 @@ static VALUE local_output_port_write(VALUE _local_port, VALUE rb_type_name, VALU
     return local_port.connected() ? Qtrue : Qfalse;
 }
 
+struct RComponentLoader {
+    RTT::ComponentLoader component_loader;
+};
+
+static void delete_component_loader(RComponentLoader* loader) {
+    delete loader;
+}
+
+VALUE component_loader_new(int argc, VALUE* argv, VALUE mod) {
+    VALUE rloader = Data_Wrap_Struct(cComponentLoader, 0, delete_component_loader, new RComponentLoader());
+    rb_obj_call_init(rloader, argc, argv);
+    return rloader;
+}
+
+/* Make all task models of a task library available for instantiation
+ *
+ * You usually would want to use {#load_task_library} instead
+ *
+ * @param [String] path the full path to the task library .so file
+ * @return [void]
+ */
+VALUE component_loader_load_library(VALUE self, VALUE path) {
+    RComponentLoader& rloader(get_wrapped<RComponentLoader>(self));
+    rloader.component_loader.loadLibrary(StringValuePtr(path));
+    return Qnil;
+}
+
+/* Create a task context instance of the given type
+ *
+ * The type must have previously been made available using {#load_library}
+ *
+ * @param [String] instance_name the name of the created task context
+ * @param [String] type_name the task context type name (e.g. logger::Logger)
+ * @param [Boolean] use_naming whether the newly created task context should be
+ *   registered on the name service
+ * @return [void]
+ */
+VALUE component_loader_create_local_task_context(VALUE self, VALUE instance_name, VALUE type_name, VALUE use_naming) {
+    RComponentLoader& rloader(get_wrapped<RComponentLoader>(self));
+    RTT::TaskContext* tc = rloader.component_loader.loadComponent(StringValuePtr(instance_name), StringValuePtr(type_name));
+    if (!tc) {
+        rb_raise(rb_eArgError, "could not create a task of type %s", StringValuePtr(type_name));
+    }
+    RTT::corba::CorbaDispatcher::Instance(tc->ports(), ORO_SCHED_OTHER, RTT::os::LowestPriority);
+    RTT::corba::TaskContextServer::Create(tc, RTEST(use_naming));
+
+    VALUE rlocal_ruby_task = Data_Wrap_Struct(cLocalTaskContext, 0, delete_local_task_context, new RLocalTaskContext(tc));
+    rb_obj_call_init(rlocal_ruby_task, 0, nullptr);
+    return rlocal_ruby_task;
+}
+
 void Orocos_init_ruby_task_context(VALUE mOrocos, VALUE cTaskContext, VALUE cOutputPort, VALUE cInputPort)
 {
     VALUE mRubyTasks = rb_define_module_under(mOrocos, "RubyTasks");
     cRubyTaskContext = rb_define_class_under(mRubyTasks, "TaskContext", cTaskContext);
-    cLocalRubyTaskContext = rb_define_class_under(cRubyTaskContext, "LocalTaskContext", rb_cObject);
+    cLocalRubyTaskContext = rb_define_class_under(cRubyTaskContext, "LocalRubyTaskContext", rb_cObject);
     rb_define_singleton_method(cLocalRubyTaskContext, "new", RUBY_METHOD_FUNC(local_ruby_task_context_new), 2);
-    rb_define_method(cLocalRubyTaskContext, "dispose", RUBY_METHOD_FUNC(static_cast<VALUE(*)(VALUE)>(local_ruby_task_context_dispose)), 0);
-    rb_define_method(cLocalRubyTaskContext, "ior", RUBY_METHOD_FUNC(local_ruby_task_context_ior), 0);
+    rb_define_method(cLocalRubyTaskContext, "dispose", RUBY_METHOD_FUNC(local_task_context_dispose), 0);
+    rb_define_method(cLocalRubyTaskContext, "ior", RUBY_METHOD_FUNC(local_task_context_ior), 0);
     rb_define_method(cLocalRubyTaskContext, "model_name=", RUBY_METHOD_FUNC(local_ruby_task_context_set_model_name), 1);
     rb_define_method(cLocalRubyTaskContext, "do_create_port", RUBY_METHOD_FUNC(local_ruby_task_context_create_port), 4);
     rb_define_method(cLocalRubyTaskContext, "do_remove_port", RUBY_METHOD_FUNC(local_ruby_task_context_remove_port), 1);
     rb_define_method(cLocalRubyTaskContext, "do_create_property", RUBY_METHOD_FUNC(local_ruby_task_context_create_property), 3);
     rb_define_method(cLocalRubyTaskContext, "do_create_attribute", RUBY_METHOD_FUNC(local_ruby_task_context_create_attribute), 3);
     rb_define_method(cLocalRubyTaskContext, "exception", RUBY_METHOD_FUNC(local_ruby_task_context_exception), 0);
+
+    cComponentLoader = rb_define_class_under(mOrocos, "ComponentLoader", rb_cObject);
+    rb_define_singleton_method(cComponentLoader, "new", RUBY_METHOD_FUNC(component_loader_new), -1);
+    rb_define_method(cComponentLoader, "load_library", RUBY_METHOD_FUNC(component_loader_load_library), 1);
+    rb_define_method(cComponentLoader, "create_local_task_context", RUBY_METHOD_FUNC(component_loader_create_local_task_context), 3);
+
+    cLocalTaskContext = rb_define_class_under(mOrocos, "LocalTaskContext", rb_cObject);
+    rb_define_method(cLocalTaskContext, "dispose", RUBY_METHOD_FUNC(local_task_context_dispose), 0);
+    rb_define_method(cLocalTaskContext, "ior", RUBY_METHOD_FUNC(local_task_context_ior), 0);
 
     cLocalOutputPort = rb_define_class_under(mRubyTasks, "LocalOutputPort", cOutputPort);
     rb_define_method(cLocalOutputPort, "do_write", RUBY_METHOD_FUNC(local_output_port_write), 2);
