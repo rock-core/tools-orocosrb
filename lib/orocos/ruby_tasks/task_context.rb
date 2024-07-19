@@ -8,7 +8,7 @@ module Orocos
         # Internal handler used to represent the local RTT::TaskContext object
         #
         # It is created from Ruby as it handles the RTT::TaskContext pointer
-        class LocalTaskContext
+        class LocalRubyTaskContext
             # [Orocos::TaskContext] the remote task
             attr_reader :remote_task
             # [String] the task name
@@ -41,7 +41,7 @@ module Orocos
                 model.instance_eval(&block)
             end
 
-            local_task = LocalTaskContext.new(name, register_on_name_server)
+            local_task = LocalRubyTaskContext.new(name, register_on_name_server)
             local_task.model_name = model.name if model&.name
 
             remote_task = super(local_task.ior, name: name, model: model, **options)
