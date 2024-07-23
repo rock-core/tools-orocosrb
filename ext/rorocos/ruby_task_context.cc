@@ -8,6 +8,8 @@
 #include <rtt/internal/ConnFactory.hpp>
 
 #include <rtt/deployment/ComponentLoader.hpp>
+#include <rtt/extras/FileDescriptorActivity.hpp>
+#include <rtt/extras/SlaveActivity.hpp>
 
 #include <rtt/OutputPort.hpp>
 #include <rtt/base/InputPortInterface.hpp>
@@ -19,6 +21,8 @@
 #include <rtt/transports/corba/TaskContextServer.hpp>
 #include <rtt/transports/corba/CorbaDispatcher.hpp>
 #include "rblocking_call.h"
+
+using namespace std;
 
 #ifdef HAS_GETTID
 #include <sys/syscall.h>
@@ -201,6 +205,10 @@ static VALUE local_ruby_task_context_new(VALUE klass, VALUE _name, VALUE use_nam
     return rlocal_ruby_task;
 }
 
+/* Delete this local task context
+ *
+ * @return [void]
+ */
 static VALUE local_task_context_dispose(VALUE obj)
 {
     RLocalTaskContext& task = get_wrapped<RLocalTaskContext>(obj);
@@ -208,11 +216,76 @@ static VALUE local_task_context_dispose(VALUE obj)
     return Qnil;
 }
 
+/* Return the task's IOR
+ *
+ * The IOR is an object address for CORBA. It can be used to create an
+ * Orocos::TaskContext without relying on a name server
+ *
+ * @return [String]
+ */
 static VALUE local_task_context_ior(VALUE _task)
 {
     RTT::TaskContext& task = local_task_context(_task);
     std::string ior = RTT::corba::TaskContextServer::getIOR(&task);
     return rb_str_new(ior.c_str(), ior.length());
+}
+
+/* Setup this local task to be explicitly triggered (e.g. for port-driven tasks)
+ *
+ * @return [void]
+ */
+static VALUE local_task_context_make_triggered(VALUE _task)
+{
+    RTT::TaskContext& task = local_task_context(_task);
+    auto activity = make_unique<RTT::Activity>();
+    if (!task.setActivity(activity.get())) {
+        rb_raise(rb_eArgError, "failed to set activity");
+    }
+    activity.release();
+    return Qnil;
+}
+
+/* Setup this local task to be periodic
+ *
+ * @param [Float] period period in seconds
+ * @return [void]
+ */
+static VALUE local_task_context_make_periodic(VALUE _task, VALUE period)
+{
+    RTT::TaskContext& task = local_task_context(_task);
+    auto activity = make_unique<RTT::Activity>();
+    activity->setPeriod(NUM2DBL(period));
+    task.setActivity(activity.get());
+    activity.release();
+    return Qnil;
+}
+
+/* Setup this local task to be fd-driven
+ *
+ * @return [void]
+ */
+static VALUE local_task_context_make_fd_driven(VALUE _task)
+{
+    RTT::TaskContext& task = local_task_context(_task);
+    auto activity = make_unique<RTT::extras::FileDescriptorActivity>(ORO_SCHED_OTHER, 0);
+    task.setActivity(activity.get());
+    activity.release();
+    return Qnil;
+}
+
+/* Setup this local task to be a slave
+ *
+ * Slave tasks' update hook can be explicitly executed using {#execute}
+ *
+ * @return [void]
+ */
+static VALUE local_task_context_make_slave(VALUE _task)
+{
+    RTT::TaskContext& task = local_task_context(_task);
+    auto activity = make_unique<RTT::extras::SlaveActivity>();
+    task.setActivity(activity.get());
+    activity.release();
+    return Qnil;
 }
 
 static void delete_rtt_ruby_port(RTT::base::PortInterface* port)
@@ -527,6 +600,10 @@ void Orocos_init_ruby_task_context(VALUE mOrocos, VALUE cTaskContext, VALUE cOut
     cLocalTaskContext = rb_define_class_under(mOrocos, "LocalTaskContext", rb_cObject);
     rb_define_method(cLocalTaskContext, "dispose", RUBY_METHOD_FUNC(local_task_context_dispose), 0);
     rb_define_method(cLocalTaskContext, "ior", RUBY_METHOD_FUNC(local_task_context_ior), 0);
+    rb_define_method(cLocalTaskContext, "make_triggered", RUBY_METHOD_FUNC(local_task_context_make_triggered), 0);
+    rb_define_method(cLocalTaskContext, "make_periodic", RUBY_METHOD_FUNC(local_task_context_make_periodic), 1);
+    rb_define_method(cLocalTaskContext, "make_fd_driven", RUBY_METHOD_FUNC(local_task_context_make_fd_driven), 0);
+    rb_define_method(cLocalTaskContext, "make_slave", RUBY_METHOD_FUNC(local_task_context_make_slave), 0);
 
     cLocalOutputPort = rb_define_class_under(mRubyTasks, "LocalOutputPort", cOutputPort);
     rb_define_method(cLocalOutputPort, "do_write", RUBY_METHOD_FUNC(local_output_port_write), 2);
