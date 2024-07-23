@@ -1,5 +1,8 @@
 module Orocos
+    # Interface allowing to instanciate orogen-generated components in-process
     class ComponentLoader
+        attr_reader :pkgconfig_loader
+
         def initialize(loader: Orocos.default_pkgconfig_loader)
             @pkgconfig_loader = loader
         end
