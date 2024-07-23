@@ -230,6 +230,21 @@ static VALUE local_task_context_ior(VALUE _task)
     return rb_str_new(ior.c_str(), ior.length());
 }
 
+/* Explicitly execute a running local task's updateHook when it is running on a slave
+ * activity
+ *
+ * Does nothing when on another activity
+ *
+ * @return [void]
+ * @see make_slave
+ */
+static VALUE local_task_context_execute(VALUE _task)
+{
+    RTT::TaskContext& task = local_task_context(_task);
+    task.getActivity()->execute();
+    return Qnil;
+}
+
 /* Setup this local task to be explicitly triggered (e.g. for port-driven tasks)
  *
  * @return [void]
@@ -600,6 +615,7 @@ void Orocos_init_ruby_task_context(VALUE mOrocos, VALUE cTaskContext, VALUE cOut
     cLocalTaskContext = rb_define_class_under(mOrocos, "LocalTaskContext", rb_cObject);
     rb_define_method(cLocalTaskContext, "dispose", RUBY_METHOD_FUNC(local_task_context_dispose), 0);
     rb_define_method(cLocalTaskContext, "ior", RUBY_METHOD_FUNC(local_task_context_ior), 0);
+    rb_define_method(cLocalTaskContext, "execute", RUBY_METHOD_FUNC(local_task_context_execute), 0);
     rb_define_method(cLocalTaskContext, "make_triggered", RUBY_METHOD_FUNC(local_task_context_make_triggered), 0);
     rb_define_method(cLocalTaskContext, "make_periodic", RUBY_METHOD_FUNC(local_task_context_make_periodic), 1);
     rb_define_method(cLocalTaskContext, "make_fd_driven", RUBY_METHOD_FUNC(local_task_context_make_fd_driven), 0);
