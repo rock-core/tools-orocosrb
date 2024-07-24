@@ -7,6 +7,10 @@
 #include <rtt/transports/corba/TransportPlugin.hpp>
 #include <rtt/internal/ConnFactory.hpp>
 
+#include <rtt/deployment/ComponentLoader.hpp>
+#include <rtt/extras/FileDescriptorActivity.hpp>
+#include <rtt/extras/SlaveActivity.hpp>
+
 #include <rtt/OutputPort.hpp>
 #include <rtt/base/InputPortInterface.hpp>
 
@@ -18,16 +22,20 @@
 #include <rtt/transports/corba/CorbaDispatcher.hpp>
 #include "rblocking_call.h"
 
+using namespace std;
+
 #ifdef HAS_GETTID
 #include <sys/syscall.h>
 #endif
 
 static VALUE cRubyTaskContext;
+static VALUE cLocalRubyTaskContext;
 static VALUE cLocalTaskContext;
+static VALUE cComponentLoader;
 static VALUE cLocalOutputPort;
 static VALUE cLocalInputPort;
 
-struct LocalTaskContext : public RTT::TaskContext
+struct LocalRubyTaskContext : public RTT::TaskContext
 {
     std::string model_name;
 
@@ -39,10 +47,10 @@ struct LocalTaskContext : public RTT::TaskContext
     void setModelName(std::string const& value)
     { model_name = value; }
 
-    LocalTaskContext(std::string const& name)
+    LocalRubyTaskContext(std::string const& name)
         : RTT::TaskContext(name, TaskCore::PreOperational)
-        , _getModelName("getModelName", &LocalTaskContext::getModelName, this, RTT::ClientThread)
-        , ___orogen_getTID("__orogen_getTID", &LocalTaskContext::__orogen_getTID, this, RTT::OwnThread)
+        , _getModelName("getModelName", &LocalRubyTaskContext::getModelName, this, RTT::ClientThread)
+        , ___orogen_getTID("__orogen_getTID", &LocalRubyTaskContext::__orogen_getTID, this, RTT::OwnThread)
         , _state("state")
     {
         setupComponentInterface();
@@ -132,25 +140,30 @@ struct LocalTaskContext : public RTT::TaskContext
 
 struct RLocalTaskContext
 {
-    LocalTaskContext* tc;
-    RLocalTaskContext(LocalTaskContext* tc)
+    RTT::TaskContext* tc;
+    RLocalTaskContext(RTT::TaskContext* tc)
         : tc(tc) {}
 };
 
-LocalTaskContext& local_task_context(VALUE obj)
+RTT::TaskContext& local_task_context(VALUE obj)
 {
-    LocalTaskContext* tc = get_wrapped<RLocalTaskContext>(obj).tc;
+    RTT::TaskContext* tc = get_wrapped<RLocalTaskContext>(obj).tc;
     if (!tc)
         rb_raise(rb_eArgError, "accessing a disposed task context");
     return *tc;
 }
 
-static void local_task_context_dispose(RLocalTaskContext* rtask)
+LocalRubyTaskContext& local_ruby_task_context(VALUE obj)
+{
+    return dynamic_cast<LocalRubyTaskContext&>(local_task_context(obj));
+}
+
+static void local_task_context_dispose_internal(RLocalTaskContext* rtask)
 {
     if (!rtask->tc)
         return;
 
-    LocalTaskContext* task = rtask->tc;
+    RTT::TaskContext* task = rtask->tc;
 
     // Ruby GC does not give any guarantee about the ordering of garbage
     // collection. Reset the dataflowinterface to NULL on all ports so that
@@ -171,13 +184,13 @@ static void local_task_context_dispose(RLocalTaskContext* rtask)
 static void delete_local_task_context(RLocalTaskContext* rtask)
 {
     std::auto_ptr<RLocalTaskContext> guard(rtask);
-    local_task_context_dispose(rtask);
+    local_task_context_dispose_internal(rtask);
 }
 
-static VALUE local_task_context_new(VALUE klass, VALUE _name, VALUE use_naming)
+static VALUE local_ruby_task_context_new(VALUE klass, VALUE _name, VALUE use_naming)
 {
     std::string name = StringValuePtr(_name);
-    LocalTaskContext* ruby_task = new LocalTaskContext(name);
+    LocalRubyTaskContext* ruby_task = new LocalRubyTaskContext(name);
 #if RTT_VERSION_GTE(2,8,99)
     ruby_task->addConstant<int>("CorbaDispatcherScheduler", ORO_SCHED_OTHER);
     ruby_task->addConstant<int>("CorbaDispatcherPriority", RTT::os::LowestPriority);
@@ -187,23 +200,107 @@ static VALUE local_task_context_new(VALUE klass, VALUE _name, VALUE use_naming)
 
     RTT::corba::TaskContextServer::Create(ruby_task, RTEST(use_naming));
 
-    VALUE rlocal_task = Data_Wrap_Struct(cLocalTaskContext, 0, delete_local_task_context, new RLocalTaskContext(ruby_task));
-    rb_obj_call_init(rlocal_task, 1, &_name);
-    return rlocal_task;
+    VALUE rlocal_ruby_task = Data_Wrap_Struct(cLocalRubyTaskContext, 0, delete_local_task_context, new RLocalTaskContext(ruby_task));
+    rb_obj_call_init(rlocal_ruby_task, 1, &_name);
+    return rlocal_ruby_task;
 }
 
+/* Delete this local task context
+ *
+ * @return [void]
+ */
 static VALUE local_task_context_dispose(VALUE obj)
 {
     RLocalTaskContext& task = get_wrapped<RLocalTaskContext>(obj);
-    local_task_context_dispose(&task);
+    local_task_context_dispose_internal(&task);
     return Qnil;
 }
 
+/* Return the task's IOR
+ *
+ * The IOR is an object address for CORBA. It can be used to create an
+ * Orocos::TaskContext without relying on a name server
+ *
+ * @return [String]
+ */
 static VALUE local_task_context_ior(VALUE _task)
 {
-    LocalTaskContext& task = local_task_context(_task);
+    RTT::TaskContext& task = local_task_context(_task);
     std::string ior = RTT::corba::TaskContextServer::getIOR(&task);
     return rb_str_new(ior.c_str(), ior.length());
+}
+
+/* Explicitly execute a running local task's updateHook when it is running on a slave
+ * activity
+ *
+ * Does nothing when on another activity
+ *
+ * @return [void]
+ * @see make_slave
+ */
+static VALUE local_task_context_execute(VALUE _task)
+{
+    RTT::TaskContext& task = local_task_context(_task);
+    task.getActivity()->execute();
+    return Qnil;
+}
+
+/* Setup this local task to be explicitly triggered (e.g. for port-driven tasks)
+ *
+ * @return [void]
+ */
+static VALUE local_task_context_make_triggered(VALUE _task)
+{
+    RTT::TaskContext& task = local_task_context(_task);
+    auto activity = make_unique<RTT::Activity>();
+    if (!task.setActivity(activity.get())) {
+        rb_raise(rb_eArgError, "failed to set activity");
+    }
+    activity.release();
+    return Qnil;
+}
+
+/* Setup this local task to be periodic
+ *
+ * @param [Float] period period in seconds
+ * @return [void]
+ */
+static VALUE local_task_context_make_periodic(VALUE _task, VALUE period)
+{
+    RTT::TaskContext& task = local_task_context(_task);
+    auto activity = make_unique<RTT::Activity>();
+    activity->setPeriod(NUM2DBL(period));
+    task.setActivity(activity.get());
+    activity.release();
+    return Qnil;
+}
+
+/* Setup this local task to be fd-driven
+ *
+ * @return [void]
+ */
+static VALUE local_task_context_make_fd_driven(VALUE _task)
+{
+    RTT::TaskContext& task = local_task_context(_task);
+    auto activity = make_unique<RTT::extras::FileDescriptorActivity>(ORO_SCHED_OTHER, 0);
+    task.setActivity(activity.get());
+    activity.release();
+    return Qnil;
+}
+
+/* Setup this local task to be a slave
+ *
+ * Slave tasks' update hook can be explicitly executed using {#execute}
+ *
+ * @return [void]
+ */
+static VALUE local_task_context_make_slave(VALUE _task)
+{
+    RTT::TaskContext& task = local_task_context(_task);
+    auto activity = make_unique<RTT::extras::SlaveActivity>();
+    task.setActivity(activity.get());
+    activity.release();
+    return Qnil;
 }
 
 static void delete_rtt_ruby_port(RTT::base::PortInterface* port)
@@ -227,15 +324,15 @@ static void delete_rtt_ruby_attribute(RTT::base::AttributeBase* attribute)
  *     model_name=(name)
  *
  */
-static VALUE local_task_context_set_model_name(VALUE _task, VALUE name)
+static VALUE local_ruby_task_context_set_model_name(VALUE _task, VALUE name)
 {
-    local_task_context(_task).setModelName(StringValuePtr(name));
+    local_ruby_task_context(_task).setModelName(StringValuePtr(name));
     return Qnil;
 }
 
-static VALUE local_task_context_exception(VALUE _task)
+static VALUE local_ruby_task_context_exception(VALUE _task)
 {
-    local_task_context(_task).exception();
+    local_ruby_task_context(_task).exception();
     return Qnil;
 }
 
@@ -243,7 +340,7 @@ static VALUE local_task_context_exception(VALUE _task)
  *     do_create_port(klass, port_name, orocos_type_name)
  *
  */
-static VALUE local_task_context_create_port(VALUE _task, VALUE _is_output, VALUE _klass, VALUE _port_name, VALUE _type_name)
+static VALUE local_ruby_task_context_create_port(VALUE _task, VALUE _is_output, VALUE _klass, VALUE _port_name, VALUE _type_name)
 {
     std::string port_name = StringValuePtr(_port_name);
     std::string type_name = StringValuePtr(_type_name);
@@ -269,10 +366,10 @@ static VALUE local_task_context_create_port(VALUE _task, VALUE _is_output, VALUE
     return ruby_port;
 }
 
-static VALUE local_task_context_remove_port(VALUE obj, VALUE _port_name)
+static VALUE local_ruby_task_context_remove_port(VALUE obj, VALUE _port_name)
 {
     std::string port_name = StringValuePtr(_port_name);
-    LocalTaskContext& task(local_task_context(obj));
+    LocalRubyTaskContext& task(local_ruby_task_context(obj));
     RTT::DataFlowInterface& di(*task.ports());
     RTT::base::PortInterface* port = di.getPort(port_name);
     if (!port)
@@ -288,7 +385,7 @@ static VALUE local_task_context_remove_port(VALUE obj, VALUE _port_name)
  *     do_create_property(klass, port_name, orocos_type_name)
  *
  */
-static VALUE local_task_context_create_property(VALUE _task, VALUE _klass, VALUE _property_name, VALUE _type_name)
+static VALUE local_ruby_task_context_create_property(VALUE _task, VALUE _klass, VALUE _property_name, VALUE _type_name)
 {
     std::string property_name = StringValuePtr(_property_name);
     std::string type_name = StringValuePtr(_type_name);
@@ -313,7 +410,7 @@ static VALUE local_task_context_create_property(VALUE _task, VALUE _klass, VALUE
  *     do_create_attribute(klass, port_name, orocos_type_name)
  *
  */
-static VALUE local_task_context_create_attribute(VALUE _task, VALUE _klass, VALUE _attribute_name, VALUE _type_name)
+static VALUE local_ruby_task_context_create_attribute(VALUE _task, VALUE _klass, VALUE _attribute_name, VALUE _type_name)
 {
     std::string attribute_name = StringValuePtr(_attribute_name);
     std::string type_name = StringValuePtr(_type_name);
@@ -444,20 +541,85 @@ static VALUE local_output_port_write(VALUE _local_port, VALUE rb_type_name, VALU
     return local_port.connected() ? Qtrue : Qfalse;
 }
 
+struct RComponentLoader {
+    RTT::ComponentLoader component_loader;
+};
+
+static void delete_component_loader(RComponentLoader* loader) {
+    delete loader;
+}
+
+VALUE component_loader_new(int argc, VALUE* argv, VALUE mod) {
+    VALUE rloader = Data_Wrap_Struct(cComponentLoader, 0, delete_component_loader, new RComponentLoader());
+    rb_obj_call_init(rloader, argc, argv);
+    return rloader;
+}
+
+/* Make all task models of a task library available for instantiation
+ *
+ * You usually would want to use {#load_task_library} instead
+ *
+ * @param [String] path the full path to the task library .so file
+ * @return [void]
+ */
+VALUE component_loader_load_library(VALUE self, VALUE path) {
+    RComponentLoader& rloader(get_wrapped<RComponentLoader>(self));
+    rloader.component_loader.loadLibrary(StringValuePtr(path));
+    return Qnil;
+}
+
+/* Create a task context instance of the given type
+ *
+ * The type must have previously been made available using {#load_library}
+ *
+ * @param [String] instance_name the name of the created task context
+ * @param [String] type_name the task context type name (e.g. logger::Logger)
+ * @param [Boolean] use_naming whether the newly created task context should be
+ *   registered on the name service
+ * @return [void]
+ */
+VALUE component_loader_create_local_task_context(VALUE self, VALUE instance_name, VALUE type_name, VALUE use_naming) {
+    RComponentLoader& rloader(get_wrapped<RComponentLoader>(self));
+    RTT::TaskContext* tc = rloader.component_loader.loadComponent(StringValuePtr(instance_name), StringValuePtr(type_name));
+    if (!tc) {
+        rb_raise(rb_eArgError, "could not create a task of type %s", StringValuePtr(type_name));
+    }
+    RTT::corba::CorbaDispatcher::Instance(tc->ports(), ORO_SCHED_OTHER, RTT::os::LowestPriority);
+    RTT::corba::TaskContextServer::Create(tc, RTEST(use_naming));
+
+    VALUE rlocal_ruby_task = Data_Wrap_Struct(cLocalTaskContext, 0, delete_local_task_context, new RLocalTaskContext(tc));
+    rb_obj_call_init(rlocal_ruby_task, 0, nullptr);
+    return rlocal_ruby_task;
+}
+
 void Orocos_init_ruby_task_context(VALUE mOrocos, VALUE cTaskContext, VALUE cOutputPort, VALUE cInputPort)
 {
     VALUE mRubyTasks = rb_define_module_under(mOrocos, "RubyTasks");
     cRubyTaskContext = rb_define_class_under(mRubyTasks, "TaskContext", cTaskContext);
-    cLocalTaskContext = rb_define_class_under(cRubyTaskContext, "LocalTaskContext", rb_cObject);
-    rb_define_singleton_method(cLocalTaskContext, "new", RUBY_METHOD_FUNC(local_task_context_new), 2);
-    rb_define_method(cLocalTaskContext, "dispose", RUBY_METHOD_FUNC(static_cast<VALUE(*)(VALUE)>(local_task_context_dispose)), 0);
+    cLocalRubyTaskContext = rb_define_class_under(cRubyTaskContext, "LocalRubyTaskContext", rb_cObject);
+    rb_define_singleton_method(cLocalRubyTaskContext, "new", RUBY_METHOD_FUNC(local_ruby_task_context_new), 2);
+    rb_define_method(cLocalRubyTaskContext, "dispose", RUBY_METHOD_FUNC(local_task_context_dispose), 0);
+    rb_define_method(cLocalRubyTaskContext, "ior", RUBY_METHOD_FUNC(local_task_context_ior), 0);
+    rb_define_method(cLocalRubyTaskContext, "model_name=", RUBY_METHOD_FUNC(local_ruby_task_context_set_model_name), 1);
+    rb_define_method(cLocalRubyTaskContext, "do_create_port", RUBY_METHOD_FUNC(local_ruby_task_context_create_port), 4);
+    rb_define_method(cLocalRubyTaskContext, "do_remove_port", RUBY_METHOD_FUNC(local_ruby_task_context_remove_port), 1);
+    rb_define_method(cLocalRubyTaskContext, "do_create_property", RUBY_METHOD_FUNC(local_ruby_task_context_create_property), 3);
+    rb_define_method(cLocalRubyTaskContext, "do_create_attribute", RUBY_METHOD_FUNC(local_ruby_task_context_create_attribute), 3);
+    rb_define_method(cLocalRubyTaskContext, "exception", RUBY_METHOD_FUNC(local_ruby_task_context_exception), 0);
+
+    cComponentLoader = rb_define_class_under(mOrocos, "ComponentLoader", rb_cObject);
+    rb_define_singleton_method(cComponentLoader, "new", RUBY_METHOD_FUNC(component_loader_new), -1);
+    rb_define_method(cComponentLoader, "load_library", RUBY_METHOD_FUNC(component_loader_load_library), 1);
+    rb_define_method(cComponentLoader, "create_local_task_context", RUBY_METHOD_FUNC(component_loader_create_local_task_context), 3);
+
+    cLocalTaskContext = rb_define_class_under(mOrocos, "LocalTaskContext", rb_cObject);
+    rb_define_method(cLocalTaskContext, "dispose", RUBY_METHOD_FUNC(local_task_context_dispose), 0);
     rb_define_method(cLocalTaskContext, "ior", RUBY_METHOD_FUNC(local_task_context_ior), 0);
-    rb_define_method(cLocalTaskContext, "model_name=", RUBY_METHOD_FUNC(local_task_context_set_model_name), 1);
-    rb_define_method(cLocalTaskContext, "do_create_port", RUBY_METHOD_FUNC(local_task_context_create_port), 4);
-    rb_define_method(cLocalTaskContext, "do_remove_port", RUBY_METHOD_FUNC(local_task_context_remove_port), 1);
-    rb_define_method(cLocalTaskContext, "do_create_property", RUBY_METHOD_FUNC(local_task_context_create_property), 3);
-    rb_define_method(cLocalTaskContext, "do_create_attribute", RUBY_METHOD_FUNC(local_task_context_create_attribute), 3);
-    rb_define_method(cLocalTaskContext, "exception", RUBY_METHOD_FUNC(local_task_context_exception), 0);
+    rb_define_method(cLocalTaskContext, "execute", RUBY_METHOD_FUNC(local_task_context_execute), 0);
+    rb_define_method(cLocalTaskContext, "make_triggered", RUBY_METHOD_FUNC(local_task_context_make_triggered), 0);
+    rb_define_method(cLocalTaskContext, "make_periodic", RUBY_METHOD_FUNC(local_task_context_make_periodic), 1);
+    rb_define_method(cLocalTaskContext, "make_fd_driven", RUBY_METHOD_FUNC(local_task_context_make_fd_driven), 0);
+    rb_define_method(cLocalTaskContext, "make_slave", RUBY_METHOD_FUNC(local_task_context_make_slave), 0);
 
     cLocalOutputPort = rb_define_class_under(mRubyTasks, "LocalOutputPort", cOutputPort);
     rb_define_method(cLocalOutputPort, "do_write", RUBY_METHOD_FUNC(local_output_port_write), 2);

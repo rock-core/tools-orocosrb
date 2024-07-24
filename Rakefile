@@ -122,7 +122,8 @@ namespace :setup do
     end
 end
 
-require 'yard/rake/yardoc_task'
+require "yard"
+require "yard/rake/yardoc_task"
 YARD::Rake::YardocTask.new
 
 task :doc => :yard
