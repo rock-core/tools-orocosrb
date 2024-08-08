@@ -104,7 +104,7 @@ module Orocos
             # Instanciate all the sub-loaders
             default_pkgconfig_loader
             default_file_loader
-            ROS.default_loader
+            ROS.default_loader if Orocos::ROS.enabled?
         end
         @default_loader
     end
