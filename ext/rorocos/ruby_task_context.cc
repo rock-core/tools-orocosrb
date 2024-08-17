@@ -164,6 +164,7 @@ static void local_task_context_dispose_internal(RLocalTaskContext* rtask)
         return;
 
     RTT::TaskContext* task = rtask->tc;
+    RTT::corba::CorbaDispatcher::Release(task->ports());
 
     // Ruby GC does not give any guarantee about the ordering of garbage
     // collection. Reset the dataflowinterface to NULL on all ports so that
