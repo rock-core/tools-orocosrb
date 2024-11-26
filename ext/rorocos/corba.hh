@@ -85,6 +85,7 @@ extern void corba_must_be_initialized();
     catch(RTT::corba::CNoSuchPortException) { this->rb_raise(eNotFound);}\
     catch(RTT::corba::CNoSuchNameException) { this->rb_raise(eNotFound);}\
     catch(RTT::corba::StdException& e) { this->rb_raise(eCORBA, e.what); } \
+    catch(CORBA::UserException& e) { this->rb_raise(eNotFound);}\
     catch(CosNaming::NamingContext::NotFound& e) { this->rb_raise(eNotFound, "cannot find naming context %s",e.rest_of_name[0].id.in()); } \
     catch(CORBA::COMM_FAILURE& e) { this->rb_raise(eCORBAComError, "CORBA communication failure: %s", e.NP_minorString()); } \
     catch(CORBA::TRANSIENT& e) { this->rb_raise(eCORBAComError, "CORBA transient exception: %s", e.NP_minorString()); } \
