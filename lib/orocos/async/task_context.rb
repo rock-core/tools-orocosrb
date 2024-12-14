@@ -88,7 +88,7 @@ module Orocos::Async::CORBA
         end
 
         def respond_to_missing?(method_name, include_private = false)
-            (reachable? && @delegator_obj.respond_to?(method_name)) || super
+            @delegator_obj&.respond_to?(method_name) || super
         end
 
         def method_missing(m,*args)
