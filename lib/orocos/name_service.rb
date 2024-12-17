@@ -62,8 +62,8 @@ module Orocos
     end
 
     # (see NameService#get)
-    def self.get(name, options = Hash.new)
-        Orocos.name_service.get(name, options)
+    def self.get(name, **options)
+        Orocos.name_service.get(name, **options)
     end
 
     # Base class for all Orocos name services. An orocos name service is used
@@ -310,11 +310,11 @@ module Orocos
         end
 
         #(see NameServiceBase#get)
-        def get(name,options = Hash.new)
+        def get(name, **options)
             name_services.each do |service|
                 begin
                     if service.same_namespace?(name)
-                        task_context = service.get(name,options)
+                        task_context = service.get(name, **options)
 			return task_context if task_context
                     end
                 rescue Orocos::NotFound
@@ -416,7 +416,7 @@ module Orocos
 
             # Returns an Async object that maps to this name service
             def to_async(options = Hash.new)
-                Orocos::Async::Local::NameService.new(:tasks => registered_tasks)
+                Orocos::Async::NameService.new(self.class.new(registered_tasks))
             end
 
             #(see NameServiceBase#get)
@@ -575,7 +575,7 @@ module Orocos
             # @param (see Orocos::Async::CORBA::NameService#initialize)
             # @return [Orocos::Async::CORBA::NameService]
             def to_async(reconnect: true)
-                Orocos::Async::CORBA::NameService.new(ip, reconnect: reconnect)
+                Orocos::Async::NameService.new(self.class.new(ip))
             end
 
             # Resets the CORBA name service client.

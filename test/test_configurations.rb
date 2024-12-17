@@ -927,7 +927,6 @@ describe Orocos::TaskConfigurations do
                 # We must load all properties before we activate FakeFS
                 task.each_property do |p|
                     v = p.new_sample
-                    v.zero!
                     p.write v
                 end
                 flexmock(conf).should_receive(:save).
@@ -985,9 +984,7 @@ describe Orocos::TaskConfigurations do
                 @task = Orocos.get 'task'
                 # We must load all properties before we activate FakeFS
                 task.each_property do |p|
-                    v = p.new_sample
-                    v.zero!
-                    p.write v
+                    p.write p.new_sample
                 end
                 conf = Orocos::TaskConfigurations.new(task.model)
                 @expected = conf.normalize_conf(Orocos::TaskConfigurations.read_task_conf(task))

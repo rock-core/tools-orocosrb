@@ -85,6 +85,19 @@ module Orocos
             result
         end
 
+        def wait_running(*process_names)
+            process_ior_mappings = {}
+            process_names.each do |name|
+                if deployments[name]&.resolve_all_tasks
+                    process_ior_mappings[name] = { iors: deployments[name].wait_running }
+                else
+                    process_ior_mappings[name] =
+                        { error: "#{name} is not a valid process in the deployment" }
+                end
+            end
+            process_ior_mappings
+        end
+
         # Requests to stop the given deployment
         #
         # The call does not block until the process has quit. You will have to

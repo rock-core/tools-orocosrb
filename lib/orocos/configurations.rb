@@ -760,19 +760,17 @@ module Orocos
         #
         # @see conf conf_to_ruby
         def conf_as_typelib(names, override: false)
-            c = conf(names, override)
-            return if !c
+            return unless (c = conf(names, override))
 
-            result = Hash.new
-            c.each do |property_name, ruby_value|
+            c.each_with_object({}) do |(property_name, ruby_value), result|
                 orocos_type = model.find_property(property_name).type
                 typelib_type = loader.typelib_type_for(orocos_type)
 
-                typelib_value = typelib_type.new
-                typelib_value.zero!
-                result[property_name] = TaskConfigurations.apply_conf_on_typelib_value(typelib_value, ruby_value)
+                typelib_value = typelib_type.zero
+                result[property_name] = TaskConfigurations.apply_conf_on_typelib_value(
+                    typelib_value, ruby_value
+                )
             end
-            result
         end
 
         # Applies the specified configuration to the given task

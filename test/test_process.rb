@@ -10,7 +10,7 @@ describe Orocos::Process do
         project = OroGen::Spec::Project.new(@loader)
         project.default_task_superclass = OroGen::Spec::TaskContext.new(
             project, 'base::Task', subclasses: false
-        ) 
+        )
         @task_m = OroGen::Spec::TaskContext.new project, 'test::Task'
         @deployment_m = OroGen::Spec::Deployment.new project, 'test_deployment'
         @default_deployment_m = OroGen::Spec::Deployment.new project, 'orogen_default_test__Task'
@@ -57,7 +57,7 @@ describe Orocos::Process do
             assert_equal Hash[deployment_m => nil], deployments
         end
         it "raises if an unexisting name is given" do
-            assert_raises(ArgumentError) do
+            assert_raises(OroGen::NotFound) do
                 Orocos::Process.partition_run_options 'does_not_exist', loader: @loader
             end
         end
@@ -183,48 +183,201 @@ describe Orocos::Process do
             end
         end
     end
-    
+
     describe "#spawn" do
         it "starts a new process and waits for it with a timeout" do
-            process = Orocos::Process.new('process')
+            process = Orocos::Process.new("process")
             # To ensure that the test teardown will kill it
             processes << process
-            process.spawn :wait => 10
-            Orocos.get "process_Test"
+            process.spawn wait: 10
+            process.task("process_Test")
             assert(process.alive?)
             assert(process.running?)
         end
 
         it "starts a new process and waits for it without a timeout" do
-            process = Orocos::Process.new('process')
+            process = Orocos::Process.new("process")
             # To ensure that the test teardown will kill it
             processes << process
-            process.spawn :wait => true
-            Orocos.get "process_Test"
+            process.spawn wait: true
+            process.task("process_Test")
             assert(process.alive?)
             assert(process.running?)
         end
 
         it "can automatically add prefixes to tasks" do
-            process = Orocos::Process.new 'process'
+            process = Orocos::Process.new "process"
             begin
-                process.spawn :prefix => 'prefix'
-                assert_equal Hash["process_Test" => "prefixprocess_Test"], process.name_mappings
-                assert Orocos.name_service.get('prefixprocess_Test')
+                process.spawn prefix: "prefix"
+                assert_equal Hash["process_Test" => "prefixprocess_Test"],
+                             process.name_mappings
+                assert process.task("prefixprocess_Test")
+
             ensure
                 process.kill
             end
         end
 
         it "can rename single tasks" do
-            process = Orocos::Process.new 'process'
+            process = Orocos::Process.new "process"
             begin
                 process.map_name "process_Test", "prefixprocess_Test"
                 process.spawn
-                assert Orocos.name_service.get('prefixprocess_Test')
+                assert process.task("prefixprocess_Test")
             ensure
                 process.kill
             end
+        end
+    end
+
+    describe "#load_and_validate_ior_message" do
+        it "loads and validates the ior message when it is valid" do
+            process = Orocos::Process.new("process")
+            message = "{\"process_Test\": \"IOR:123456\"}"
+            result = process.load_and_validate_ior_message(message)
+            assert_equal(result, JSON.parse(message))
+        end
+
+        it "returns nil when the ior message is not parseable" do
+            process = Orocos::Process.new("process")
+            # Missing the `}`
+            message = "{\"process_Test\": \"IOR:123456\""
+            result = process.load_and_validate_ior_message(message)
+            assert_nil(result)
+        end
+
+        it "raises invalid ior message when a task is not included in the ior message" do
+            process = Orocos::Process.new("process")
+            message = "{\"another_process\": \"IOR:123456\"}"
+            error = assert_raises(Orocos::InvalidIORMessage) do
+                process.load_and_validate_ior_message(message)
+            end
+            expected_error = Orocos::InvalidIORMessage.new(
+                "the following tasks were present on the ior message but werent in the " \
+                "process task names: [\"another_process\"]"
+            )
+            assert_equal(expected_error.message, error.message)
+        end
+    end
+
+    describe "#wait_running" do
+        attr_reader :process
+        before do
+            @message = "{\"process_Test\": \"IOR:123456\"}"
+            @process = Orocos::Process.new("process")
+            flexmock(process).should_receive(:task)
+        end
+
+        it "resolves the ior mappings" do
+            read, write = IO.pipe
+            flexmock(IO).should_receive(:pipe)
+                        .and_return([read, write])
+            process.spawn(wait: false)
+            flexmock(read).should_receive(:read_nonblock)
+                          .and_return(@message)
+                          .and_return do
+                              raise EOFError
+                          end
+            result = process.wait_running(0)
+            assert_equal(JSON.parse(@message), result)
+        end
+
+        it "stops waiting after the timeout was reached" do
+            read, write = IO.pipe
+            flexmock(IO).should_receive(:pipe)
+                        .and_return([read, write])
+            flexmock(read).should_receive(:read_nonblock)
+                          .and_raise(IO::EAGAINWaitReadable)
+            process.spawn(wait: false)
+            t = Thread.new do
+                result = process.wait_running(0.1)
+                assert_nil(result)
+            end
+            t.join
+        end
+
+        it "parses the message correctly even when it was first received partially" do
+            read, write = IO.pipe
+            flexmock(IO).should_receive(:pipe)
+                        .and_return([read, write])
+            initial_message = @message.slice(0, 4)
+            rest_of_the_message = @message.slice(4, @message.length)
+
+            read_mock = flexmock(read).should_receive(:read_nonblock)
+            read_mock.and_return(initial_message, rest_of_the_message)
+            read_mock.and_raise(EOFError)
+            process.spawn(wait: false)
+            result = process.wait_running(0.1)
+            assert_equal(JSON.parse(@message), result)
+        end
+
+        it "stops waiting if the process has crashed" do
+            read, write = IO.pipe
+            flexmock(IO).should_receive(:pipe)
+                        .and_return([read, write])
+            flexmock(read)
+                .should_receive(:read_nonblock)
+                .and_raise(IO::EAGAINWaitReadable)
+            process.spawn(wait: false)
+
+            alive_mock = flexmock(process).should_receive(:alive?)
+            alive_mock.and_return(true).ordered
+            alive_mock.and_return(false).ordered
+            e = assert_raises(Orocos::NotFound) do
+                process.wait_running(2)
+            end
+            assert_equal("process was started but crashed", e.message)
+        end
+
+        it "raises if the process is dead after waiting" do
+            read, write = IO.pipe
+            flexmock(IO).should_receive(:pipe)
+                        .and_return([read, write])
+            flexmock(read)
+                .should_receive(:read_nonblock)
+                .and_raise(IO::EAGAINWaitReadable)
+            process.spawn(wait: false)
+
+            alive_mock = flexmock(process).should_receive(:alive?)
+            alive_mock.and_return(false).ordered
+            e = assert_raises(Orocos::NotFound) do
+                process.wait_running(2)
+            end
+            assert_equal("cannot get a running process module", e.message)
+        end
+    end
+
+    describe "#resolve_all_tasks" do
+        attr_reader :process
+        before do
+            @process = Orocos::Process.new("process")
+        end
+
+        it "returns all the process tasks when their ior is registered" do
+            process.spawn(wait: false)
+            process.wait_running(0.1)
+            result = process.resolve_all_tasks
+            assert_includes(result, "process_Test")
+            assert_equal("process_Test", result["process_Test"].name)
+        end
+
+        it "returns the already defined process tasks without checking their ior registration" do
+            process.spawn(wait: false)
+            process.wait_running(0.1)
+            process.resolve_all_tasks
+            spy = flexmock(:on, Orocos::Process)
+            process.resolve_all_tasks
+            assert_spy_not_called(spy, :ior_for)
+        end
+
+        it "raises when ior is not registered" do
+            process.spawn(wait: false)
+            process.wait_running(0.1)
+            flexmock(process).should_receive(:ior_for)
+            e = assert_raises(Orocos::IORNotRegisteredError) do
+                process.resolve_all_tasks
+            end
+            assert("no IOR was registered for process", e.message)
         end
     end
 
@@ -240,7 +393,7 @@ describe Orocos::Process do
 
         it "stops the task if it is running" do
             Orocos.run("process") do |process|
-                task = Orocos.get "process_Test"
+                task = process.task("process_Test")
                 state = nil
                 flexmock(::Process)
                     .should_receive(:kill)
@@ -254,7 +407,7 @@ describe Orocos::Process do
 
         it "does not attempt to stop the task if cleanup is false" do
             Orocos.run("process") do |process|
-                task = Orocos.get "process_Test"
+                task = process.task("process_Test")
                 state = nil
                 flexmock(::Process)
                     .should_receive(:kill)
@@ -292,7 +445,7 @@ describe Orocos::Process do
     describe "#task" do
         it "can get a reference on a deployed task context by name" do
             Orocos.run('process') do |process|
-                assert(direct   = Orocos::TaskContext.get('process_Test'))
+                assert(direct   = process.task('process_Test'))
                 assert(indirect = process.task("Test"))
                 assert_equal(direct, indirect)
             end
@@ -316,13 +469,13 @@ describe Orocos::Process do
     describe "run" do
         it "can start a process with a prefix" do
             Orocos.run('process' => 'prefix') do |process|
-                assert(Orocos::TaskContext.get('prefixprocess_Test'))
+                assert(process.task('prefixprocess_Test'))
             end
         end
 
         it "can wait for the process to be running without a timeout" do
-            Orocos.run 'process', :wait => true do
-                Orocos.get 'process_Test'
+            Orocos.run 'process', wait: true do |process|
+                process.task("process_Test")
             end
         end
     end

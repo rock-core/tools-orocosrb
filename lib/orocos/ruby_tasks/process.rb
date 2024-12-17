@@ -53,6 +53,9 @@ module Orocos
         # @return [Class]
         attr_reader :task_context_class
 
+        # The ior mappings of the deployed tasks
+        attr_reader :ior_mappings
+
         # Creates a new ruby task process
         #
         # @param [nil,#dead_deployment] ruby_process_server the process manager
@@ -64,6 +67,7 @@ module Orocos
             @ruby_process_server = ruby_process_server
             @deployed_tasks = Hash.new
             @task_context_class = task_context_class
+            @ior_mappings = nil
             super(name, model)
         end
 
@@ -74,32 +78,38 @@ module Orocos
             model.task_activities.each do |deployed_task|
                 name = get_mapped_name(deployed_task.name)
                 Orocos.allow_blocking_calls do
-                    deployed_tasks[name] = task_context_class.
-                        from_orogen_model(name, deployed_task.task_model)
+                    deployed_tasks[name] =
+                        task_context_class.from_orogen_model(name,
+                                                             deployed_task.task_model)
                 end
             end
             @alive = true
         end
 
-        # Waits for the tasks to be ready
-        #
-        # This is a no-op for ruby tasks as they are ready as soon as they are
-        # created
-        def wait_running(blocking = false)
-            true
+        # The ruby tasks are already ready, so all this is does is to get the IOR mappings
+        # from them. The wait_running method name is maintained to keep the API closer to
+        # the remote process'.
+        def wait_running
+            (@ior_mappings = deployed_tasks.transform_values(&:ior)) unless @ior_mappings
+            @ior_mappings
         end
 
         def task(task_name)
-            if t = deployed_tasks[task_name]
+            if (t = deployed_tasks[task_name])
                 t
-            else raise ArgumentError, "#{self} has no task called #{task_name}, known tasks: #{deployed_tasks.keys.sort.join(", ")}"
+            else
+                raise ArgumentError,
+                      "#{self} has no task called #{task_name}, known tasks: "\
+                      "#{deployed_tasks.keys.sort.join(', ')}"
             end
         end
 
-        def resolve_all_tasks(cache = Hash.new)
-            Orocos::Process.resolve_all_tasks(self, cache) do |task_name|
-                task(task_name)
-            end
+        def resolve_all_tasks
+            deployed_tasks
+        end
+
+        def define_ior_mappings(ior_mappings)
+            @ior_mappings = ior_mappings
         end
 
         def kill(_wait = true, status = ProcessManager::Status.new(exit_code: 0), **)
