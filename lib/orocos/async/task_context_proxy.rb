@@ -506,7 +506,7 @@ module Orocos::Async
 
             on_port_reachable(false) do |name|
                 p = @ports[name]
-                if p && !p.reachable?
+                if p && !p.valid_delegator?
                     error_callback = Proc.new do |error|
                         p.emit_error(error)
                     end
@@ -517,7 +517,7 @@ module Orocos::Async
             end
             on_property_reachable(false) do |name|
                 p = @properties[name]
-                if(p && !p.reachable?)
+                if(p && !p.valid_delegator?)
                     error_callback = Proc.new do |error|
                         p.emit_error(error)
                     end
@@ -528,7 +528,7 @@ module Orocos::Async
             end
             on_attribute_reachable(false) do |name|
                 a = @attributes[name]
-                if(a && !a.reachable?)
+                if(a && !a.valid_delegator?)
                     error_callback = Proc.new do |error|
                         a.emit_error(error)
                     end
@@ -589,7 +589,8 @@ module Orocos::Async
                 Orocos.warn "ignoring options: #{other_options}"
             end
 
-            return p if !reachable? || p.reachable?
+            return p if !valid_delegator? || p.valid_delegator?
+
             if options[:wait]
                 connect_property(p)
                 p.wait
@@ -618,7 +619,8 @@ module Orocos::Async
                 Orocos.warn "ignoring options: #{other_options}"
             end
 
-            return a if !reachable? || a.reachable?
+            return a if !valid_delegator? || a.valid_delegator?
+
             if options[:wait]
                 connect_attribute(a)
                 a.wait
@@ -632,7 +634,7 @@ module Orocos::Async
 
         def port(name,options = Hash.new)
             name = name.to_str
-            options,other_options = Kernel.filter_options options,:wait => @options[:wait]
+            options, other_options = Kernel.filter_options options,:wait => @options[:wait]
             wait if options[:wait]
 
             # support for subports
@@ -664,7 +666,7 @@ module Orocos::Async
                 Orocos.warn "ignoring options: #{other_options}"
             end
 
-            if reachable? && !p.reachable?
+            if valid_delegator? && !p.valid_delegator?
                 if options[:wait]
                     connect_port(p)
                     p.wait
@@ -841,8 +843,10 @@ module Orocos::Async
         # all private methods must be thread safe
         def connect_port(port)
             return if port.reachable?
+
             p = @mutex.synchronize do
                 return unless valid_delegator?
+
                 @delegator_obj.disable_emitting do
                     #called in the context of @delegator_obj
                     begin
@@ -928,7 +932,7 @@ module Orocos::Async
         end
 
         def respond_to_missing?(method_name, include_private = false)
-            (reachable? && @delegator_obj.respond_to?(method_name)) || super
+            (valid_delegator? && @delegator_obj.respond_to?(method_name)) || super
         end
 
         def method_missing(m,*args)
