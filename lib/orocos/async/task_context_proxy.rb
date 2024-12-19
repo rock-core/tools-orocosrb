@@ -168,7 +168,7 @@ module Orocos::Async
         end
 
         def to_s
-            "#<Orocos::Async::PortProxy #{full_name}[#{type.name}]>"
+            "#<Orocos::Async::PortProxy #{full_name}[#{@type&.name}]>"
         end
 
         def type_name
