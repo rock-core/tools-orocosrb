@@ -221,7 +221,7 @@ module Orocos::Async
                 if valid_delegator?
                     @access_error =
                         access_error ||
-                        ArgumentError.new("cannot access the remote task context for an unknown reason")
+                        Disposed.new("cannot access the remote task context for an unknown reason")
                     task = @delegator_obj
                     invalidate_delegator!
                     @watchdog_timer&.cancel
