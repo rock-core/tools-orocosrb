@@ -208,25 +208,29 @@ module Orocos::Async
         #
         # @param [Exception] reason The reason for the disconnect
         # @return [Orocos::TaskContext,nil,Utilrb::EventLoop::Event]
-        def unreachable!(options = Hash.new)
-            options = Kernel.validate_options options, :error
+        def unreachable!(error: nil)
             # ensure that this is always called from the
             # event loop thread
             @event_loop.call do
-                old_task = @mutex.synchronize do
-                    if valid_delegator?
-                        @access_error = options.delete(:error) ||
-                            ArgumentError.new("cannot access the remote task context for an unknown reason")
-                        task = @delegator_obj
-                        invalidate_delegator!
-                        @watchdog_timer.cancel if @watchdog_timer
-                        task
-                    end
-                end
-                clear_interface
-                event :unreachable if old_task
-                old_task
+                dispose(access_error: error)
             end
+        end
+
+        def dispose(access_error: nil)
+            old_task = @mutex.synchronize do
+                if valid_delegator?
+                    @access_error =
+                        access_error ||
+                        Disposed.new("cannot access the remote task context for an unknown reason")
+                    task = @delegator_obj
+                    invalidate_delegator!
+                    @watchdog_timer&.cancel
+                    task
+                end
+                event :unreachable if old_task
+            end
+            clear_interface
+            old_task
         end
 
         def clear_interface
