@@ -184,7 +184,12 @@ static void local_task_context_dispose_internal(RLocalTaskContext* rtask)
 
 static void delete_local_task_context(RLocalTaskContext* rtask)
 {
+    #if __cplusplus < 201103L
     std::auto_ptr<RLocalTaskContext> guard(rtask);
+    #else
+    std::unique_ptr<RLocalTaskContext> guard(rtask);
+    #endif
+
     local_task_context_dispose_internal(rtask);
 }
 
