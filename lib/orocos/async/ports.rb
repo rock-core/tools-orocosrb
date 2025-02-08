@@ -39,7 +39,7 @@ module Orocos::Async::CORBA
             poll_timer.doc = port.full_name
             @poll_timer = poll_timer
 
-            # otherwise event reachable will be queued and all 
+            # otherwise event reachable will be queued and all
             # listeners will be called twice (one for registering and one because
             # of the queued event)
             disable_emitting do
@@ -229,7 +229,7 @@ module Orocos::Async::CORBA
         end
 
         def port
-            @mutex.synchronize do 
+            @mutex.synchronize do
                 if !valid_delegator?
                     error = Orocos::NotFound.new "Port #{name} is not reachable"
                     [nil,error]
@@ -265,6 +265,7 @@ module Orocos::Async::CORBA
             options, policy = Kernel.filter_options options, :period => nil
             policy[:init] = true unless policy.has_key?(:init)
             policy[:pull] = true unless policy.has_key?(:pull)
+            policy[:signalling] = false unless policy.has_key?(:signalling)
             if block
                 orig_reader(policy) do |reader,error|
                     unless error
@@ -370,7 +371,7 @@ module Orocos::Async::CORBA
 
         def unreachable!(options = Hash.new)
             if @global_reader.respond_to?(:unreachable!)
-                @global_reader.unreachable! 
+                @global_reader.unreachable!
             end
             super
         end
