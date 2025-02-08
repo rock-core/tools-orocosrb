@@ -416,6 +416,7 @@ static RTT::corba::CConnPolicy policyFromHash(VALUE options)
     result.data_size = NUM2INT(rb_hash_aref(options, ID2SYM(rb_intern("data_size"))));
     result.init = RTEST(rb_hash_aref(options, ID2SYM(rb_intern("init"))));
     result.pull = RTEST(rb_hash_aref(options, ID2SYM(rb_intern("pull"))));
+    result.signalling = RTEST(rb_hash_lookup2(options, ID2SYM(rb_intern("signalling")), Qtrue));
     result.size = NUM2INT(rb_hash_aref(options, ID2SYM(rb_intern("size"))));
     VALUE name_id = rb_hash_aref(options, ID2SYM(rb_intern("name_id")));
     result.name_id = CORBA::string_dup(StringValuePtr(name_id));
