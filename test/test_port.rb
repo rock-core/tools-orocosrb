@@ -28,6 +28,63 @@ describe Orocos::Port do
         end
     end
 
+    describe ".default_buffer_type" do
+        after do
+            Orocos::Port.default_buffer_type = :fifo_buffer
+        end
+
+        it "is initialized to fifo_buffer" do
+            assert_equal :fifo_buffer, Orocos::Port.default_buffer_type
+        end
+
+        it "can be changed to circular_buffer" do
+            Orocos::Port.default_buffer_type = :circular_buffer
+            assert_equal :circular_buffer, Orocos::Port.default_buffer_type
+        end
+
+        it "can be changed back to fifo_buffer" do
+            Orocos::Port.default_buffer_type = :circular_buffer
+            Orocos::Port.default_buffer_type = :fifo_buffer
+            assert_equal :fifo_buffer, Orocos::Port.default_buffer_type
+        end
+    end
+
+    describe "the 'buffer' connection type in connection policies" do
+        before do
+            @source_task = new_ruby_task_context("source")
+            @source_task.create_output_port "p", "/int32_t"
+            @sink_task = new_ruby_task_context("sink")
+            @sink_task.create_input_port "p", "/int32_t"
+        end
+
+        after do
+            Orocos::Port.default_buffer_type = :fifo_buffer
+        end
+
+        it "uses fifo_buffer by default" do
+            @source_task.p.connect_to @sink_task.p, type: :buffer, size: 2
+            @source_task.p.write 1
+            @source_task.p.write 2
+            @source_task.p.write 3
+
+            assert_equal 1, @sink_task.p.read_new
+            assert_equal 2, @sink_task.p.read_new
+            assert_nil @sink_task.p.read_new
+        end
+
+        it "uses circular_buffer if default_buffer_type has been changed" do
+            Orocos::Port.default_buffer_type = :circular_buffer
+            @source_task.p.connect_to @sink_task.p, type: :buffer, size: 2
+            @source_task.p.write 1
+            @source_task.p.write 2
+            @source_task.p.write 3
+
+            assert_equal 2, @sink_task.p.read_new
+            assert_equal 3, @sink_task.p.read_new
+            assert_nil @sink_task.p.read_new
+        end
+    end
+
     describe "handle_mq_transport" do
         attr_reader :port
         before do
