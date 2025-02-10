@@ -47,6 +47,11 @@ struct RTaskContext
     std::string name;
 };
 
+struct RChannelElement
+{
+    RTT::corba::CChannelElement_var channel;
+};
+
 /**
  * This class locates and connects to a Corba TaskContext.
  * It can do that through an IOR.
@@ -82,8 +87,8 @@ extern CORBA::Any* ruby_to_corba(std::string const& type_name, Typelib::Value sr
 extern void corba_must_be_initialized();
 
 #define CORBA_EXCEPTION_HANDLERS \
-    catch(RTT::corba::CNoSuchPortException) { this->rb_raise(eNotFound);}\
-    catch(RTT::corba::CNoSuchNameException) { this->rb_raise(eNotFound);}\
+    catch(RTT::corba::CNoSuchPortException) { this->rb_raise(eNotFound, "no such port");}\
+    catch(RTT::corba::CNoSuchNameException) { this->rb_raise(eNotFound, "no such name");}\
     catch(RTT::corba::StdException& e) { this->rb_raise(eCORBA, e.what); } \
     catch(CosNaming::NamingContext::NotFound& e) { this->rb_raise(eNotFound, "cannot find naming context %s",e.rest_of_name[0].id.in()); } \
     catch(CORBA::COMM_FAILURE& e) { this->rb_raise(eCORBAComError, "CORBA communication failure: %s", e.NP_minorString()); } \

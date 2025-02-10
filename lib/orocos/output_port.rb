@@ -72,7 +72,7 @@ module Orocos
                 end
                 raise
             end
-                    
+
             self
         rescue Orocos::ConnectionFailed => e
             raise e, "failed to connect #{full_name} => #{input_port.full_name} with policy #{policy.inspect}"
@@ -89,6 +89,43 @@ module Orocos
                 do_disconnect_from(input)
             end
         end
+
+        # Create the half-channel that can transfer data from this port
+        #
+        # The channel is not connected to the port (yet). The general connection
+        # process is (order matters !)
+        #
+        #     output_port_channel, policy = output.build_channel_half(insert your policy)
+        #     input_port_channel = input.build_channel_half(**policy)
+        #     output_port_channel.remote_side = input_port_channel
+        #     input_port_channel.remote_side = output_port_channel
+        #     output_port.connect_channel_half(output_port_channel, init: true)
+        #     input_port.connect_channel_half(input_port_channel)
+        #
+        # @param [Hash] policy the connection policy
+        # @return [(ChannelElement,Hash)] the created channel and the updated connection
+        #   policy. The returned policy must be the one given to the
+        #   {InputPort#build_channel_half} method
+        def build_channel_half(**policy)
+            policy = Port.prepare_policy(**policy)
+            remote_build_channel_half(policy)
+        end
+
+        # Connect a channel to this port
+        #
+        # The general connection process is (order matters !)
+        #
+        #     output_port_channel, policy = output.build_channel_half(insert your policy)
+        #     input_port_channel = input.build_channel_half(**policy)
+        #     output_port_channel.remote_side = input_port_channel
+        #     input_port_channel.remote_side = output_port_channel
+        #     output_port.connect_channel_half(output_port_channel, init: true)
+        #     input_port.connect_channel_half(input_port_channel)
+        #
+        # @param [Hash] policy the connection policy as returned by
+        #   {OutputPort#build_channel_half}
+        def connect_channel_half(channel, policy)
+            remote_connect_channel_half(channel, policy)
+        end
     end
 end
-
