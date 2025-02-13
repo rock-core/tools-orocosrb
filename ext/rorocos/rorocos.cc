@@ -395,6 +395,33 @@ static VALUE port_connected_p(VALUE self)
     return result ? Qtrue : Qfalse;
 }
 
+static RTT::corba::CConnectionModel defaultBufferType = RTT::corba::CBuffer;
+
+static VALUE port_set_default_buffer_type(VALUE, VALUE type) {
+    VALUE conn_type = SYM2ID(type);
+    if (conn_type == rb_intern("fifo_buffer"))
+        defaultBufferType = RTT::corba::CBuffer;
+    else if (conn_type == rb_intern("circular_buffer"))
+        defaultBufferType = RTT::corba::CCircularBuffer;
+    else
+    {
+        VALUE obj_as_str = rb_funcall(type, rb_intern("inspect"), 0);
+        rb_raise(rb_eArgError, "invalid buffer type %s", StringValuePtr(obj_as_str));
+    }
+
+    return defaultBufferType;
+}
+
+static VALUE port_get_default_buffer_type(VALUE) {
+    if (defaultBufferType == RTT::corba::CBuffer)
+        return ID2SYM(rb_intern("fifo_buffer"));
+    else if (defaultBufferType == RTT::corba::CCircularBuffer)
+        return ID2SYM(rb_intern("circular_buffer"));
+
+    // should never happen
+    rb_raise(rb_eStandardError, "invalid internal state, default buffer type invalid");
+}
+
 static RTT::corba::CConnPolicy policyFromHash(VALUE options)
 {
     RTT::corba::CConnPolicy result = toCORBA(RTT::ConnPolicy());
@@ -403,6 +430,8 @@ static RTT::corba::CConnPolicy policyFromHash(VALUE options)
     if (conn_type == rb_intern("data"))
         result.type = RTT::corba::CData;
     else if (conn_type == rb_intern("buffer"))
+        result.type = defaultBufferType;
+    else if (conn_type == rb_intern("fifo_buffer"))
         result.type = RTT::corba::CBuffer;
     else if (conn_type == rb_intern("circular_buffer"))
         result.type = RTT::corba::CCircularBuffer;
@@ -676,6 +705,8 @@ extern "C" void Init_rorocos()
     rb_define_method(cTaskContext, "do_port", RUBY_METHOD_FUNC(task_context_do_port), 2);
     rb_define_method(cTaskContext, "do_port_names", RUBY_METHOD_FUNC(task_context_port_names), 0);
 
+    rb_define_singleton_method(cPort, "default_buffer_type=", RUBY_METHOD_FUNC(port_set_default_buffer_type), 1);
+    rb_define_singleton_method(cPort, "default_buffer_type", RUBY_METHOD_FUNC(port_get_default_buffer_type), 0);
     rb_define_method(cPort, "connected?", RUBY_METHOD_FUNC(port_connected_p), 0);
     rb_define_method(cPort, "do_disconnect_from", RUBY_METHOD_FUNC(do_port_disconnect_from), 1);
     rb_define_method(cPort, "do_disconnect_all", RUBY_METHOD_FUNC(do_port_disconnect_all), 0);
