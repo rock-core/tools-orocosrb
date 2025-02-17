@@ -106,6 +106,11 @@ describe Orocos::Port do
             @out_task_corba = Orocos::TaskContext.new out_task.ior
             @in_task = new_ruby_task_context "in_task"
             @in_task_corba = Orocos::TaskContext.new in_task.ior
+            @channels = []
+        end
+
+        after do
+            @channels.each(&:disconnect_half)
         end
 
         it "creates plain corba connections" do
@@ -113,6 +118,7 @@ describe Orocos::Port do
             in_task.create_input_port "in", "/double"
             out_port_channel, policy = out_task_corba.out.build_channel_half
             in_port_channel = in_task_corba.in.build_channel_half(policy)
+            @channels << out_port_channel << in_port_channel
             out_port_channel.remote_side = in_port_channel
             in_port_channel.remote_side = out_port_channel
             out_task_corba.out.connect_channel_half(out_port_channel, policy)
@@ -127,6 +133,8 @@ describe Orocos::Port do
             out_port_channel, policy =
                 out_task_corba.port("state").build_channel_half(init: true)
             in_port_channel = in_task_corba.in.build_channel_half(policy)
+            @channels << out_port_channel << in_port_channel
+
             out_port_channel.remote_side = in_port_channel
             in_port_channel.remote_side = out_port_channel
             out_task_corba
@@ -153,6 +161,7 @@ describe Orocos::Port do
             policy = { transport: Orocos::TRANSPORT_MQ, data_size: 8 }
             out_port_channel, policy = out_task_corba.out.build_channel_half(**policy)
             in_port_channel, = in_task_corba.in.build_channel_half(policy)
+            @channels << out_port_channel << in_port_channel
             out_port_channel.remote_side = in_port_channel
             in_port_channel.remote_side = out_port_channel
             out_task_corba.out.connect_channel_half(out_port_channel, policy)

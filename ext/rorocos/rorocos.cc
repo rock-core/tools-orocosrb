@@ -618,6 +618,15 @@ static VALUE input_port_remote_build_channel_half(VALUE rinput_port, VALUE rpoli
     return vchannel;
 }
 
+static VALUE channel_element_disconnect_half(VALUE self) {
+    RChannelElement& relement = get_wrapped<RChannelElement>(self);
+
+    RTT::corba::CRemoteChannelElement_var self_narrowed =
+        RTT::corba::CRemoteChannelElement::_narrow(relement.channel);
+    self_narrowed->disconnectHalf();
+    return Qnil;
+}
+
 static VALUE channel_element_set_remote_side(VALUE self, VALUE remote) {
     RChannelElement& relement = get_wrapped<RChannelElement>(self);
     RChannelElement& rremote = get_wrapped<RChannelElement>(remote);
@@ -878,6 +887,11 @@ extern "C" void Init_rorocos()
     rb_define_method(
         cInputPort, "remote_build_channel_half",
         RUBY_METHOD_FUNC(input_port_remote_build_channel_half), 1
+    );
+
+    rb_define_method(
+        cChannelElement, "disconnect_half",
+        RUBY_METHOD_FUNC(channel_element_disconnect_half), 0
     );
 
     rb_define_method(
