@@ -58,7 +58,8 @@ module Orocos
             raise
         end
 
-        def initialize(ior, name: self.name, **other_options)
+        def initialize(ior, other_options)
+            name = other_options.fetch(:name, self.name)
             @local_ports = Hash.new
             @local_properties = Hash.new
             @local_attributes = Hash.new
