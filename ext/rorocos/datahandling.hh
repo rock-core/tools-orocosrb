@@ -1,7 +1,10 @@
 #ifndef OROCOS_EXT_RB_DATAHANDLING_HH
 #define OROCOS_EXT_RB_DATAHANDLING_HH
 
+#define RUBY_DONT_SUBST
 #include <ruby.h>
+#undef memcpy
+
 #include <typelib_ruby.hh>
 
 namespace CORBA {

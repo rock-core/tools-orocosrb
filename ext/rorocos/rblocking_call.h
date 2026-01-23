@@ -8,6 +8,7 @@
 #include <boost/bind.hpp>
 #define RUBY_DONT_SUBST
 #include <ruby.h>
+#undef memcpy
 #include <ruby/thread.h>
 #include <stdarg.h>
 #include "rorocos.hh"
