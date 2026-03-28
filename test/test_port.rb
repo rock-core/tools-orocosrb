@@ -85,6 +85,113 @@ describe Orocos::Port do
         end
     end
 
+    it "supports CORBA connection creation via #connect_to" do
+        out_task = new_ruby_task_context "out_task"
+        out_task.create_output_port "out", "/double"
+        out_task_corba = Orocos::TaskContext.new out_task.ior
+        in_task = new_ruby_task_context "in_task"
+        in_task.create_input_port "in", "/double"
+        in_task_corba = Orocos::TaskContext.new in_task.ior
+
+        out_task_corba.out.connect_to in_task_corba.in
+        out_task.out.write 10
+        assert_equal 10, in_task.in.read_new
+    end
+
+    describe "the explicit connection creation method" do
+        attr_reader :in_task, :out_task, :in_task_corba, :out_task_corba
+
+        before do
+            @out_task = new_ruby_task_context "out_task"
+            @out_task_corba = Orocos::TaskContext.new out_task.ior
+            @in_task = new_ruby_task_context "in_task"
+            @in_task_corba = Orocos::TaskContext.new in_task.ior
+            @channels = []
+        end
+
+        after do
+            @channels.each(&:disconnect_half)
+        end
+
+        it "creates plain corba connections" do
+            out_task.create_output_port "out", "/double"
+            in_task.create_input_port "in", "/double"
+            out_port_channel, policy = out_task_corba.out.build_channel_half
+            in_port_channel = in_task_corba.in.build_channel_half(policy)
+            @channels << out_port_channel << in_port_channel
+            out_port_channel.remote_side = in_port_channel
+            in_port_channel.remote_side = out_port_channel
+            out_task_corba.out.connect_channel_half(out_port_channel, policy)
+            in_task_corba.in.connect_channel_half(in_port_channel, policy)
+
+            out_task.out.write 10
+            assert_eventually_equals(10) { in_task.in.read_new }
+        end
+
+        it "supports the 'init' mechanism" do
+            in_task.create_input_port "in", "/int"
+            out_port_channel, policy =
+                out_task_corba.port("state").build_channel_half(init: true)
+            in_port_channel = in_task_corba.in.build_channel_half(policy)
+            @channels << out_port_channel << in_port_channel
+
+            out_port_channel.remote_side = in_port_channel
+            in_port_channel.remote_side = out_port_channel
+            out_task_corba
+                .port("state")
+                .connect_channel_half(out_port_channel, policy)
+            in_task_corba.in.connect_channel_half(in_port_channel, policy)
+
+            assert_eventually_equals(1) { in_task.in.read_new }
+        end
+
+        it "handles being disposed with half channels" do
+            out_task.create_output_port "out", "/double"
+            in_task.create_input_port "in", "/double"
+            _, policy = out_task_corba.port("state").build_channel_half(init: true)
+            in_task_corba.in.build_channel_half(policy)
+            out_task.dispose
+            in_task.dispose
+        end
+
+        it "sets up MQ links" do
+            out_task.create_output_port "out", "/double"
+            in_task.create_input_port "in", "/double"
+
+            policy = { transport: Orocos::TRANSPORT_MQ, data_size: 8 }
+            out_port_channel, policy = out_task_corba.out.build_channel_half(**policy)
+            in_port_channel, = in_task_corba.in.build_channel_half(policy)
+            @channels << out_port_channel << in_port_channel
+            out_port_channel.remote_side = in_port_channel
+            in_port_channel.remote_side = out_port_channel
+            out_task_corba.out.connect_channel_half(out_port_channel, policy)
+            in_task_corba.in.connect_channel_half(in_port_channel, policy)
+
+            out_task.out.write 10
+            assert_eventually_equals(10) { in_task.in.read_new }
+        end
+
+        def assert_eventually_equals(expected, timeout: 5, poll: 0.05)
+            deadline = Time.now + timeout
+            values = []
+            while Time.now <= deadline
+                last_value = yield
+                if expected == last_value
+                    assert(true) # account for the assertion
+                    return
+                end
+
+                values << last_value
+                sleep poll
+            end
+
+            flunk(
+                "block did not return the expected value #{expected}. " \
+                "Received values: #{values}"
+            )
+        end
+    end
+
     describe "handle_mq_transport" do
         attr_reader :port
         before do

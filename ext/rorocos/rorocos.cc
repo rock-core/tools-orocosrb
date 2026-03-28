@@ -51,6 +51,7 @@ static VALUE cInputPort;
 static VALUE cOutputPort;
 static VALUE cPortAccess;
 static VALUE cPort;
+static VALUE cChannelElement;
 static VALUE eConnectionFailed;
 static VALUE eStateTransitionFailed;
 
@@ -59,7 +60,8 @@ extern void Orocos_init_ROS(VALUE mOrocos, VALUE eComError);
 extern void Orocos_init_data_handling(VALUE cTaskContext);
 extern void Orocos_init_methods();
 extern void Orocos_init_ruby_task_context(VALUE mOrocos, VALUE cTaskContext, VALUE cOutputPort, VALUE cInputPort);
-static RTT::corba::CConnPolicy policyFromHash(VALUE options);
+static RTT::ConnPolicy policyFromHash(VALUE options);
+static VALUE policyToHash(RTT::ConnPolicy const& policy);
 
 RTT::types::TypeInfo* get_type_info(std::string const& name, bool do_check)
 {
@@ -131,7 +133,9 @@ VALUE task_context_create(int argc, VALUE *argv,VALUE klass)
         rb_raise(rb_eArgError, "no ior given");
     std::string ior(StringValueCStr(argv[0]));
 
-    RTaskContext *context =  corba_blocking_fct_call_with_result(boost::bind(&CorbaAccess::createRTaskContext,CorbaAccess::instance(),ior));
+    RTaskContext *context =  corba_blocking_fct_call_with_result(
+        boost::bind(&CorbaAccess::createRTaskContext,CorbaAccess::instance(),ior)
+    );
     VALUE obj = simple_wrap(klass, context);
     rb_obj_call_init(obj,argc,argv);
     return obj;
@@ -395,46 +399,91 @@ static VALUE port_connected_p(VALUE self)
     return result ? Qtrue : Qfalse;
 }
 
-static RTT::corba::CConnectionModel defaultBufferType = RTT::corba::CBuffer;
+static int defaultBufferType = RTT::ConnPolicy::BUFFER;
 
 static VALUE port_set_default_buffer_type(VALUE, VALUE type) {
     VALUE conn_type = SYM2ID(type);
     if (conn_type == rb_intern("fifo_buffer"))
-        defaultBufferType = RTT::corba::CBuffer;
+        defaultBufferType = RTT::ConnPolicy::BUFFER;
     else if (conn_type == rb_intern("circular_buffer"))
-        defaultBufferType = RTT::corba::CCircularBuffer;
+        defaultBufferType = RTT::ConnPolicy::CIRCULAR_BUFFER;
     else
     {
         VALUE obj_as_str = rb_funcall(type, rb_intern("inspect"), 0);
         rb_raise(rb_eArgError, "invalid buffer type %s", StringValuePtr(obj_as_str));
     }
 
-    return defaultBufferType;
+    return Qnil;
 }
 
 static VALUE port_get_default_buffer_type(VALUE) {
-    if (defaultBufferType == RTT::corba::CBuffer)
+    if (defaultBufferType == RTT::ConnPolicy::BUFFER)
         return ID2SYM(rb_intern("fifo_buffer"));
-    else if (defaultBufferType == RTT::corba::CCircularBuffer)
+    else if (defaultBufferType == RTT::ConnPolicy::CIRCULAR_BUFFER)
         return ID2SYM(rb_intern("circular_buffer"));
 
     // should never happen
     rb_raise(rb_eStandardError, "invalid internal state, default buffer type invalid");
 }
 
-static RTT::corba::CConnPolicy policyFromHash(VALUE options)
+static VALUE policyToHash(RTT::ConnPolicy const& policy)
 {
-    RTT::corba::CConnPolicy result = toCORBA(RTT::ConnPolicy());
+    VALUE result = rb_hash_new();
+
+    ID type_id = 0;
+    if (policy.type == RTT::ConnPolicy::DATA) {
+        type_id = rb_intern("data");
+    }
+    else if (policy.type == RTT::ConnPolicy::BUFFER) {
+        type_id = rb_intern("fifo_buffer");
+    }
+    else if (policy.type == RTT::ConnPolicy::CIRCULAR_BUFFER) {
+        type_id = rb_intern("circular_buffer");
+    }
+    else {
+        rb_raise(rb_eArgError, "unexpected value for connection type received from RTT");
+    }
+
+    ID lock_id = 0;
+    if (policy.lock_policy == RTT::ConnPolicy::LOCK_FREE) {
+        lock_id = rb_intern("lock_free");
+    }
+    else if (policy.lock_policy == RTT::ConnPolicy::LOCKED) {
+        lock_id = rb_intern("locked");
+    }
+    else if (policy.lock_policy == RTT::ConnPolicy::UNSYNC) {
+        lock_id = rb_intern("unsync");
+    }
+    else {
+        rb_raise(rb_eArgError, "unexpected value for lock type received from RTT");
+    }
+
+    rb_hash_aset(result, ID2SYM(rb_intern("type")), ID2SYM(type_id));
+    rb_hash_aset(result, ID2SYM(rb_intern("lock")), ID2SYM(lock_id));
+    rb_hash_aset(result, ID2SYM(rb_intern("transport")), INT2NUM(policy.transport));
+    rb_hash_aset(result, ID2SYM(rb_intern("data_size")), INT2NUM(policy.data_size));
+    rb_hash_aset(result, ID2SYM(rb_intern("init")), policy.init ? Qtrue : Qfalse);
+    rb_hash_aset(result, ID2SYM(rb_intern("pull")), policy.pull ? Qtrue : Qfalse);
+    rb_hash_aset(result, ID2SYM(rb_intern("signalling")), policy.signalling ? Qtrue : Qfalse);
+    rb_hash_aset(result, ID2SYM(rb_intern("size")), INT2NUM(policy.size));
+    rb_hash_aset(result, ID2SYM(rb_intern("name_id")), rb_str_new2(policy.name_id.c_str()));
+
+    return result;
+}
+
+static RTT::ConnPolicy policyFromHash(VALUE options)
+{
+    RTT::ConnPolicy result;
     VALUE conn_type_value = rb_hash_aref(options, ID2SYM(rb_intern("type")));
     VALUE conn_type = SYM2ID(conn_type_value);
     if (conn_type == rb_intern("data"))
-        result.type = RTT::corba::CData;
+        result.type = RTT::ConnPolicy::DATA;
     else if (conn_type == rb_intern("buffer"))
         result.type = defaultBufferType;
     else if (conn_type == rb_intern("fifo_buffer"))
-        result.type = RTT::corba::CBuffer;
+        result.type = RTT::ConnPolicy::BUFFER;
     else if (conn_type == rb_intern("circular_buffer"))
-        result.type = RTT::corba::CCircularBuffer;
+        result.type = RTT::ConnPolicy::CIRCULAR_BUFFER;
     else
     {
         VALUE obj_as_str = rb_funcall(conn_type_value, rb_intern("inspect"), 0);
@@ -448,15 +497,15 @@ static RTT::corba::CConnPolicy policyFromHash(VALUE options)
     result.signalling = RTEST(rb_hash_lookup2(options, ID2SYM(rb_intern("signalling")), Qtrue));
     result.size = NUM2INT(rb_hash_aref(options, ID2SYM(rb_intern("size"))));
     VALUE name_id = rb_hash_aref(options, ID2SYM(rb_intern("name_id")));
-    result.name_id = CORBA::string_dup(StringValuePtr(name_id));
+    result.name_id = StringValuePtr(name_id);
 
     VALUE lock_type = SYM2ID(rb_hash_aref(options, ID2SYM(rb_intern("lock"))));
     if (lock_type == rb_intern("locked"))
-        result.lock_policy = RTT::corba::CLocked;
+        result.lock_policy = RTT::ConnPolicy::LOCKED;
     else if (lock_type == rb_intern("lock_free"))
-        result.lock_policy = RTT::corba::CLockFree;
+        result.lock_policy = RTT::ConnPolicy::LOCK_FREE;
     else if (lock_type == rb_intern("unsync"))
-        result.lock_policy = RTT::corba::CUnsync;
+        result.lock_policy = RTT::ConnPolicy::UNSYNC;
     else
     {
         VALUE obj_as_str = rb_funcall(lock_type, rb_intern("to_s"), 0);
@@ -475,11 +524,118 @@ static VALUE do_port_connect_to(VALUE routput_port, VALUE rinput_port, VALUE opt
     RTaskContext* in_task; VALUE in_name;
     tie(in_task, tuples::ignore, in_name) = getPortReference(rinput_port);
 
-    RTT::corba::CConnPolicy policy = policyFromHash(options);
+    RTT::corba::CConnPolicy policy = toCORBA(policyFromHash(options));
     bool result = corba_blocking_fct_call_with_result(bind(&_objref_CDataFlowInterface::createConnection,(_objref_CDataFlowInterface*)out_task->ports,
                 StringValuePtr(out_name),in_task->ports,StringValuePtr(in_name),policy));
     if(!result)
         rb_raise(eConnectionFailed, "failed to connect ports");
+    return Qnil;
+}
+
+static VALUE input_port_remote_connect_channel_half(VALUE vport, VALUE vchannel, VALUE vpolicy)
+{
+    RTaskContext* task; VALUE port_name;
+    tie(task, tuples::ignore, port_name) = getPortReference(vport);
+    RChannelElement& rchannel = get_wrapped<RChannelElement>(vchannel);
+
+    RTT::corba::CConnPolicy policy = toCORBA(policyFromHash(vpolicy));
+    bool result =
+        corba_blocking_fct_call_with_result(
+            bind(&_objref_CDataFlowInterface::connectChannelOutputHalf,
+                 (_objref_CDataFlowInterface*)task->ports,
+                 StringValuePtr(port_name), rchannel.channel, boost::ref(policy))
+        );
+    if(!result) {
+        rb_raise(eConnectionFailed, "channel not ready");
+    }
+    return Qnil;
+}
+
+static VALUE output_port_remote_build_channel_half(VALUE routput_port, VALUE rpolicy)
+{
+    RTaskContext* out_task; VALUE out_name;
+    tie(out_task, tuples::ignore, out_name) = getPortReference(routput_port);
+
+    RTT::corba::CConnPolicy policy = toCORBA(policyFromHash(rpolicy));
+    RTT::corba::CChannelElement_var channel =
+        corba_blocking_fct_call_with_result(
+            bind(&_objref_CDataFlowInterface::buildChannelInputHalf,
+                 (_objref_CDataFlowInterface*)out_task->ports,
+                 StringValuePtr(out_name), boost::ref(policy))
+        );
+    if(CORBA::is_nil(channel)) {
+        rb_raise(eConnectionFailed, "failed to build channel output");
+    }
+
+    VALUE vpolicy = policyToHash(toRTT(policy));
+
+    RChannelElement* rchannel = new RChannelElement;
+    rchannel->channel = channel;
+    VALUE vchannel = simple_wrap<RChannelElement>(cChannelElement, rchannel);
+
+    return rb_ary_new_from_args(2, vchannel, vpolicy);
+}
+
+static VALUE output_port_remote_connect_channel_half(VALUE vport, VALUE vchannel, VALUE vpolicy)
+{
+    RTaskContext* task; VALUE port_name;
+    tie(task, tuples::ignore, port_name) = getPortReference(vport);
+    RChannelElement& rchannel = get_wrapped<RChannelElement>(vchannel);
+
+    RTT::corba::CConnPolicy policy = toCORBA(policyFromHash(vpolicy));
+    bool result =
+        corba_blocking_fct_call_with_result(
+            bind(&_objref_CDataFlowInterface::connectChannelInputHalf,
+                 (_objref_CDataFlowInterface*)task->ports,
+                 StringValuePtr(port_name), rchannel.channel, policy)
+        );
+    if(!result) {
+        rb_raise(eConnectionFailed, "channel not ready");
+    }
+    return Qnil;
+}
+
+static VALUE input_port_remote_build_channel_half(VALUE rinput_port, VALUE rpolicy)
+{
+    RTaskContext* task; VALUE port_name;
+    tie(task, tuples::ignore, port_name) = getPortReference(rinput_port);
+
+    RTT::corba::CConnPolicy policy = toCORBA(policyFromHash(rpolicy));
+    RTT::corba::CChannelElement_var channel =
+        corba_blocking_fct_call_with_result(
+            bind(&_objref_CDataFlowInterface::buildChannelOutputHalf,
+                 (_objref_CDataFlowInterface*)task->ports,
+                 StringValuePtr(port_name), policy)
+        );
+    if(CORBA::is_nil(channel)) {
+        rb_raise(eConnectionFailed, "failed to build channel output");
+    }
+
+    RChannelElement* rchannel = new RChannelElement;
+    rchannel->channel = channel;
+    VALUE vchannel = simple_wrap<RChannelElement>(cChannelElement, rchannel);
+
+    return vchannel;
+}
+
+static VALUE channel_element_disconnect_half(VALUE self) {
+    RChannelElement& relement = get_wrapped<RChannelElement>(self);
+
+    RTT::corba::CRemoteChannelElement_var self_narrowed =
+        RTT::corba::CRemoteChannelElement::_narrow(relement.channel);
+    self_narrowed->disconnectHalf();
+    return Qnil;
+}
+
+static VALUE channel_element_set_remote_side(VALUE self, VALUE remote) {
+    RChannelElement& relement = get_wrapped<RChannelElement>(self);
+    RChannelElement& rremote = get_wrapped<RChannelElement>(remote);
+
+    RTT::corba::CRemoteChannelElement_var self_narrowed =
+        RTT::corba::CRemoteChannelElement::_narrow(relement.channel);
+    RTT::corba::CRemoteChannelElement_var arg_narrowed =
+        RTT::corba::CRemoteChannelElement::_narrow(rremote.channel);
+    self_narrowed->setRemoteSide(arg_narrowed);
     return Qnil;
 }
 
@@ -508,7 +664,7 @@ static VALUE do_port_create_stream(VALUE rport, VALUE _policy)
     RTaskContext* task; VALUE name;
     tie(task, tuples::ignore, name) = getPortReference(rport);
 
-    RTT::corba::CConnPolicy policy = policyFromHash(_policy);
+    RTT::corba::CConnPolicy policy = toCORBA(policyFromHash(_policy));
     bool result = corba_blocking_fct_call_with_result(bind(&_objref_CDataFlowInterface::createStream,(_objref_CDataFlowInterface*)task->ports,
                 StringValuePtr(name),policy));
     if(!result)
@@ -682,6 +838,7 @@ extern "C" void Init_rorocos()
     cOutputPort   = rb_define_class_under(mOrocos, "OutputPort", cPort);
     cInputPort    = rb_define_class_under(mOrocos, "InputPort", cPort);
     cPortAccess   = rb_define_class_under(mOrocos, "PortAccess", rb_cObject);
+    cChannelElement = rb_define_class_under(mOrocos, "ChannelElement", rb_cObject);
     eNotFound     = rb_define_class_under(mOrocos, "NotFound", rb_eRuntimeError);
     eStateTransitionFailed = rb_define_class_under(mOrocos, "StateTransitionFailed", rb_eRuntimeError);
     eConnectionFailed = rb_define_class_under(mOrocos, "ConnectionFailed", rb_eRuntimeError);
@@ -712,7 +869,35 @@ extern "C" void Init_rorocos()
     rb_define_method(cPort, "do_disconnect_all", RUBY_METHOD_FUNC(do_port_disconnect_all), 0);
     rb_define_method(cPort, "do_create_stream", RUBY_METHOD_FUNC(do_port_create_stream), 1);
     rb_define_method(cPort, "do_remove_stream", RUBY_METHOD_FUNC(do_port_remove_stream), 1);
+
     rb_define_method(cOutputPort, "do_connect_to", RUBY_METHOD_FUNC(do_port_connect_to), 2);
+    rb_define_method(
+        cInputPort, "remote_connect_channel_half",
+        RUBY_METHOD_FUNC(input_port_remote_connect_channel_half), 2
+    );
+    rb_define_method(
+        cOutputPort, "remote_build_channel_half",
+        RUBY_METHOD_FUNC(output_port_remote_build_channel_half), 1
+    );
+    rb_define_method(
+        cOutputPort, "remote_connect_channel_half",
+        RUBY_METHOD_FUNC(output_port_remote_connect_channel_half), 2
+    );
+
+    rb_define_method(
+        cInputPort, "remote_build_channel_half",
+        RUBY_METHOD_FUNC(input_port_remote_build_channel_half), 1
+    );
+
+    rb_define_method(
+        cChannelElement, "disconnect_half",
+        RUBY_METHOD_FUNC(channel_element_disconnect_half), 0
+    );
+
+    rb_define_method(
+        cChannelElement, "remote_side=",
+        RUBY_METHOD_FUNC(channel_element_set_remote_side), 1
+    );
 
     Orocos_init_CORBA();
 #ifdef HAS_ROS
