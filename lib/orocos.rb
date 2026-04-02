@@ -72,3 +72,5 @@ require 'orocos/configurations'
 
 require 'orocos/extensions'
 require 'orocos/ros'
+
+require 'orocos/features'
