@@ -366,6 +366,11 @@ module Orocos
         #   otherwise
         # @see extract
         def add(name, conf, normalize: true, merge: true)
+            unless name.kind_of? String
+                raise ArgumentError,
+                      "section name must be a String, but it is a #{name.class}"
+            end
+
             if normalize
                 conf = normalize_conf(conf)
             end
@@ -589,6 +594,10 @@ module Orocos
         def normalize_conf_hash(hash, value_t) # :nodoc:
             result = Hash.new
             hash.each do |key, value|
+                unless key.kind_of? String
+                    raise ArgumentError, "#{key} must be a String, but it is #{key.class}"
+                end
+
                 begin
                     field_t = value_t[key]
                 rescue ArgumentError => e
