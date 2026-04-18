@@ -597,6 +597,36 @@ describe Orocos::TaskConfigurations do
             assert @conf.add 'does_not_already_exist', Hash['compound' => Hash['compound' => Hash['intg' => 20]]], merge: false
             assert_equal 20, @conf.conf('does_not_already_exist')['compound']['compound']['intg'].to_ruby
         end
+
+        it "raises if conf section name is not a String" do
+            assert_raises(ArgumentError) do
+                @conf.add :test_section, Hash.new
+            end
+        end
+
+        it "raises if conf has string keys in the first level" do
+            # HACK: make it behave like an utilrb Symbol, which responds to #to_str
+            first_level = flexmock(:fp)
+            first_level.should_receive(:to_str).and_return('fp')
+            e =
+                assert_raises(ArgumentError) do
+                    @conf.add "test_section", { first_level => 10 }
+                end
+            assert /must be a String, but it is/.match? e.message
+        end
+
+        it "raises if conf has string keys on inner level" do
+            # HACK: make it behave like an utilrb Symbol, which responds to #to_str
+            inner_level = flexmock(:str)
+            inner_level.should_receive(:to_str).and_return('str')
+
+            e =
+                assert_raises(ArgumentError) do
+                    @conf.add "test_section",
+                              { 'compound' => { 'compound' => { inner_level => 'aaa' } } }
+                end
+            assert /must be a String, but it is/.match? e.message
+        end
     end
 
     describe "apply_conf_on_typelib_value" do
