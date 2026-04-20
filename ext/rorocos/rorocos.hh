@@ -10,6 +10,7 @@
 // !!! also breaks boost nowadays, so keep it from substituting
 #define RUBY_DONT_SUBST
 #include <ruby.h>
+#undef memcpy
 
 //if RTT_VERSION_GTE is not defined by above includes (RTT versions below 2.9)
 #ifndef RTT_VERSION_GTE
