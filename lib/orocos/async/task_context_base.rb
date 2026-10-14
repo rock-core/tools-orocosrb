@@ -41,7 +41,7 @@ module Orocos::Async
                 prop = task.property(prop)
                 prop.wait
                 p = @ruby_task_context.create_property(prop.name,prop.type)
-                p.write p.new_sample.zero!
+                p.write p.new_sample
                 prop.on_change do |data|
                     p.write data
                 end
@@ -120,7 +120,7 @@ module Orocos::Async
             # the calling order
             if listener.event == :port_reachable
                 names = @port_names.dup
-                event_loop.once do 
+                event_loop.once do
                     names.each do |name|
                         listener.call name
                     end
@@ -202,31 +202,35 @@ module Orocos::Async
 
         # Disconnectes self from the remote task context and returns its underlying
         # object used to communicate with the remote task (designated object).
-        # 
+        #
         # Returns nil if the TaskContext is not connected.
         # Returns an EventLoop Event if not called from the event loop thread.
         #
         # @param [Exception] reason The reason for the disconnect
         # @return [Orocos::TaskContext,nil,Utilrb::EventLoop::Event]
-        def unreachable!(options = Hash.new)
-            options = Kernel.validate_options options, :error
+        def unreachable!(error: nil)
             # ensure that this is always called from the
             # event loop thread
             @event_loop.call do
-                old_task = @mutex.synchronize do
-                    if valid_delegator?
-                        @access_error = options.delete(:error) ||
-                            ArgumentError.new("cannot access the remote task context for an unknown reason")
-                        task = @delegator_obj
-                        invalidate_delegator!
-                        @watchdog_timer.cancel if @watchdog_timer
-                        task
-                    end
-                end
-                clear_interface
-                event :unreachable if old_task
-                old_task
+                dispose(access_error: error)
             end
+        end
+
+        def dispose(access_error: nil)
+            old_task = @mutex.synchronize do
+                if valid_delegator?
+                    @access_error =
+                        access_error ||
+                        Disposed.new("cannot access the remote task context for an unknown reason")
+                    task = @delegator_obj
+                    invalidate_delegator!
+                    @watchdog_timer&.cancel
+                    task
+                end
+                event :unreachable if old_task
+            end
+            clear_interface
+            old_task
         end
 
         def clear_interface
@@ -305,7 +309,7 @@ module Orocos::Async
 
         # call-seq:
         #  task.each_property { |a| ... } => task
-        # 
+        #
         # Enumerates the properties that are available on
         # this task, as instances of Orocos::Attribute
         def each_property(&block)
@@ -320,7 +324,7 @@ module Orocos::Async
 
         # call-seq:
         #  task.each_attribute { |a| ... } => task
-        # 
+        #
         # Enumerates the attributes that are available on
         # this task, as instances of Orocos::Attribute
         def each_attribute(&block)
@@ -335,7 +339,7 @@ module Orocos::Async
 
         # call-seq:
         #  task.each_port { |p| ... } => task
-        # 
+        #
         # Enumerates the ports that are available on this task, as instances of
         # either Orocos::InputPort or Orocos::OutputPort
         def each_port(&block)

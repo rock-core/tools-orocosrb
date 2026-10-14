@@ -18,7 +18,7 @@ rescue LoadError => e
     STDERR.puts "and try again"
     exit 1
 end
-    
+
 require 'typelib'
 require 'orocos/base'
 require 'orocos/default_loader'
@@ -56,6 +56,8 @@ require 'orocos/process'
 require 'orocos/corba'
 require 'orocos/mqueue'
 
+require 'orocos/component_loader'
+
 # Updated file layout for ruby tasks
 require 'orocos/ruby_tasks'
 require 'orocos/input_writer'
@@ -70,3 +72,5 @@ require 'orocos/configurations'
 
 require 'orocos/extensions'
 require 'orocos/ros'
+
+require 'orocos/features'

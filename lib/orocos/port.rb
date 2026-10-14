@@ -61,35 +61,36 @@ module Orocos
         end
 
         DEFAULT_CONNECTION_POLICY = {
-            :type => :data,
-            :init => false,
-            :pull => false,
-            :data_size => 0,
-            :size => 0,
-            :lock => :lock_free,
-            :transport => 0,
-            :name_id => ""
-        }
+            type: :data,
+            init: false,
+            pull: false,
+            data_size: 0,
+            size: 0,
+            lock: :lock_free,
+            transport: 0,
+            name_id: "",
+            signalling: true
+        }.freeze
         CONNECTION_POLICY_OPTIONS = DEFAULT_CONNECTION_POLICY.keys
 
         # A connection policy is represented by a hash whose elements are each
         # of the policy parameters. Valid policies are:
-        # 
+        #
         # * buffer policy. Values are stored in a FIFO of the specified size.
         #   Connecting with a buffer policy is done with:
-        # 
+        #
         #      output_port.connect_to(input_port, :type => :buffer, :size => 10)
-        # 
+        #
         # * data policy. The input port will always read the last value pushed by the
         #   output port. It is the default policy, but can be explicitly specified with:
-        # 
+        #
         #      output_port.connect_to(input_port, :type => :data)
-        # 
+        #
         # An additional +:pull+ option specifies if samples should be pushed by the
         # output end (i.e. if all samples that are written on the output port are sent to
         # the input port), or if the values are transmitted only when the input port is
         # read. For instance:
-        # 
+        #
         #   output_port.connect_to(input_port, :type => :data, :pull => true)
         #
         # Finally, the type of locking can be specified. The +lock_free+ locking
@@ -120,7 +121,7 @@ module Orocos
             policy
         end
 
-        # fills missing policy fields with default values, checks 
+        # fills missing policy fields with default values, checks
         # if the generated policy is valid and returns it
         def self.prepare_policy(policy = Hash.new)
             policy = DEFAULT_CONNECTION_POLICY.merge policy
@@ -141,7 +142,7 @@ module Orocos
             end
         end
 
-        #Returns the Orocos port 
+        #Returns the Orocos port
         def to_orocos_port
             self
         end
@@ -152,14 +153,14 @@ module Orocos
             policy[:transport] = transport
             policy[:name_id] = name_id
             do_create_stream(policy)
-                    
+
             self
         rescue Orocos::ConnectionFailed => e
             raise e, "failed to create stream from #{full_name} on transport #{Port.transport_name(transport)}, name #{name_id} and policy #{policy.inspect}"
         end
 
         # Removes a stream publication. The name should be the same than the one
-        # given to the 
+        # given to the
         def remove_stream(name_id)
             do_remove_stream(name_id)
             self

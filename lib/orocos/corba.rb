@@ -73,7 +73,7 @@ module Orocos
         #
         # It does not need to be called explicitely, as it is called by
         # Orocos.initialize
-	def self.initialize
+	def self.initialize(default_name_server: true)
             #setup environment which is used by the orocos.rb
 	    if !CORBA.name_service.ip.empty?
 	        ENV['ORBInitRef'] = "NameService=corbaname::#{CORBA.name_service.ip}"
@@ -84,7 +84,7 @@ module Orocos
             do_init
 
             #check if name service is reachable
-            CORBA.name_service.validate
+            CORBA.name_service.validate if default_name_server
 	end
 
 	def self.get(method, name)

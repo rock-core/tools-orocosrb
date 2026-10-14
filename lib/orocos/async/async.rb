@@ -70,7 +70,19 @@ require 'utilrb/event_loop'
 # asynchronous object.
 #
 module Orocos::Async
-    KNOWN_ERRORS = [Orocos::ComError,Orocos::NotFound,Typelib::NotFound,Orocos::TypekitTypeNotFound,Orocos::TypekitTypeNotExported,Orocos::StateTransitionFailed,Orocos::ConnectionFailed,OroGen::DefinitionTypekitNotFound]
+    class Disposed < RuntimeError; end
+
+    KNOWN_ERRORS = [
+        Orocos::ComError,
+        Orocos::NotFound,
+        Typelib::NotFound,
+        Orocos::TypekitTypeNotFound,
+        Orocos::TypekitTypeNotExported,
+        Orocos::StateTransitionFailed,
+        Orocos::ConnectionFailed,
+        OroGen::DefinitionTypekitNotFound,
+        Disposed
+    ]
     class << self
         extend ::Forwardable
 

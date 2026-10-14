@@ -62,8 +62,8 @@ module Orocos
     end
 
     # (see NameService#get)
-    def self.get(name, options = Hash.new)
-        Orocos.name_service.get(name, options)
+    def self.get(name, **options)
+        Orocos.name_service.get(name, **options)
     end
 
     # Base class for all Orocos name services. An orocos name service is used
@@ -310,11 +310,11 @@ module Orocos
         end
 
         #(see NameServiceBase#get)
-        def get(name,options = Hash.new)
+        def get(name, **options)
             name_services.each do |service|
                 begin
                     if service.same_namespace?(name)
-                        task_context = service.get(name,options)
+                        task_context = service.get(name, **options)
 			return task_context if task_context
                     end
                 rescue Orocos::NotFound

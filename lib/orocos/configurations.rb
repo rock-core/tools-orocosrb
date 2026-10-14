@@ -239,7 +239,11 @@ module Orocos
                     cache_id, cached_yaml = read_yaml_from_cache(cache_dir, doc)
                 end
                 unless cached_yaml
-                    loaded_yaml = YAML.load(StringIO.new(doc)) || Hash.new
+                    begin
+                        loaded_yaml = YAML.load(StringIO.new(doc)) || Hash.new
+                    rescue Psych::SyntaxError => e
+                        raise e, "#{e.message} while loading section #{conf_options[:name]}", e.backtrace
+                    end
                 end
 
                 begin
@@ -362,6 +366,11 @@ module Orocos
         #   otherwise
         # @see extract
         def add(name, conf, normalize: true, merge: true)
+            unless name.kind_of? String
+                raise ArgumentError,
+                      "section name must be a String, but it is a #{name.class}"
+            end
+
             if normalize
                 conf = normalize_conf(conf)
             end
@@ -585,6 +594,10 @@ module Orocos
         def normalize_conf_hash(hash, value_t) # :nodoc:
             result = Hash.new
             hash.each do |key, value|
+                unless key.kind_of? String
+                    raise ArgumentError, "#{key} must be a String, but it is #{key.class}"
+                end
+
                 begin
                     field_t = value_t[key]
                 rescue ArgumentError => e
@@ -760,19 +773,17 @@ module Orocos
         #
         # @see conf conf_to_ruby
         def conf_as_typelib(names, override: false)
-            c = conf(names, override)
-            return if !c
+            return unless (c = conf(names, override))
 
-            result = Hash.new
-            c.each do |property_name, ruby_value|
+            c.each_with_object({}) do |(property_name, ruby_value), result|
                 orocos_type = model.find_property(property_name).type
                 typelib_type = loader.typelib_type_for(orocos_type)
 
-                typelib_value = typelib_type.new
-                typelib_value.zero!
-                result[property_name] = TaskConfigurations.apply_conf_on_typelib_value(typelib_value, ruby_value)
+                typelib_value = typelib_type.zero
+                result[property_name] = TaskConfigurations.apply_conf_on_typelib_value(
+                    typelib_value, ruby_value
+                )
             end
-            result
         end
 
         # Applies the specified configuration to the given task

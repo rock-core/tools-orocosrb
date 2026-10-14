@@ -11,9 +11,12 @@ module Orocos
         # {RubyTasks::TaskContext}
         class RemoteTaskContext < Orocos::TaskContext
             # Create a {RemoteTaskContext} based on its orogen model
-            def self.from_orogen_model(name, orogen_model)
+            def self.from_orogen_model(name, orogen_model, register_on_name_server: true)
                 ruby_task = TaskContext.from_orogen_model(name, orogen_model)
-                remote_task = new(ruby_task.ior, name: ruby_task.name, model: ruby_task.model)
+                remote_task = new(
+                    ruby_task.ior,
+                    name: ruby_task.name, model: ruby_task.model
+                )
                 remote_task.instance_variable_set(:@local_ruby_task, ruby_task)
                 remote_task
             end

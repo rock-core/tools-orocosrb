@@ -15,7 +15,9 @@
 
 // !!! ruby.h must be included LAST. It defines macros that break
 // !!! omniORB code
+#define RUBY_DONT_SUBST
 #include <ruby.h>
+#undef memcpy
 
 using namespace std;
 

@@ -49,7 +49,12 @@ CorbaAccess::~CorbaAccess()
 
 RTaskContext* CorbaAccess::createRTaskContext(std::string const& ior)
 {
+    #if __cplusplus < 201103L
     std::auto_ptr<RTaskContext> new_context( new RTaskContext );
+    #else
+    std::unique_ptr<RTaskContext> new_context( new RTaskContext );
+    #endif
+
     // check if ior is a valid IOR if not an exception is thrown
     new_context->task = getCTaskContext(ior);
     new_context->main_service = new_context->task->getProvider("this");
@@ -174,7 +179,12 @@ static VALUE name_service_create(int argc, VALUE *argv,VALUE klass)
             port = StringValueCStr(argv[1]);
     }
 
+    #if __cplusplus < 201103L
     std::auto_ptr<NameServiceClient> new_name_service(new NameServiceClient(ip,port));
+    #else
+    std::unique_ptr<NameServiceClient> new_name_service(new NameServiceClient(ip,port));
+    #endif
+
     VALUE obj = simple_wrap(cNameService, new_name_service.release());
     rb_obj_call_init(obj,argc,argv);
     return obj;
@@ -246,7 +256,7 @@ static VALUE name_service_validate(VALUE self)
 static VALUE name_service_bind(VALUE self,VALUE task,VALUE task_name)
 {
     corba_must_be_initialized();
-    
+
     std::string name = StringValueCStr(task_name);
     NameServiceClient& name_service = get_wrapped<NameServiceClient>(self);
     RTaskContext& context = get_wrapped<RTaskContext>(task);

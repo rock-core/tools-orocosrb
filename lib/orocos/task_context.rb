@@ -115,12 +115,6 @@ module Orocos
             EOD
         end
 
-        # The logger task that should be used to log data that concerns this
-        # task
-        #
-        # @return [#log]
-        attr_accessor :logger
-
         # A new TaskContext instance representing the
         # remote task context with the given IOR
         #
@@ -135,10 +129,6 @@ module Orocos
         def initialize(ior, name: do_real_name, model: nil, **other_options)
             super(name, model: model, **other_options)
             @ior = ior
-
-            if process && (process.default_logger_name != name)
-                self.logger = process.default_logger
-            end
         end
 
         def ping
@@ -228,26 +218,6 @@ module Orocos
         def rtt_state
             value = CORBA.refine_exceptions(self) { do_state() }
             @state_symbols[value]
-        end
-
-        # Connects all ports of the task with the logger of the deployment
-        # @param [Hash] options option hash to exclude specific ports
-        # @option options [String,Array<String>] :exclude_ports The name of the excluded ports
-        # @return [Set<String,String>] Sets of task and port names
-        #
-        # @example logging all ports beside a port called frame
-        # task.log_all_ports(:exclude_ports => "frame")
-        def log_all_ports(options = Hash.new)
-            # Right now, the only allowed option is :exclude_ports
-            options, logger_options = Kernel.filter_options options,:exclude_ports => nil
-            exclude_ports = Array(options[:exclude_ports])
-
-            logger_options[:tasks] = Regexp.new(basename)
-            ports = Orocos.log_all_process_ports(process,logger_options) do |port|
-                !exclude_ports.include? port.name
-            end
-            raise "#{name}: no ports were selected for logging" if ports.empty?
-            ports
         end
 
         def create_property_log_stream(p)
