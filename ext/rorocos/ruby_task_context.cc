@@ -164,7 +164,6 @@ static void local_task_context_dispose_internal(RLocalTaskContext* rtask)
         return;
 
     RTT::TaskContext* task = rtask->tc;
-    RTT::corba::CorbaDispatcher::Release(task->ports());
 
     // Ruby GC does not give any guarantee about the ordering of garbage
     // collection. Reset the dataflowinterface to NULL on all ports so that
@@ -197,12 +196,6 @@ static VALUE local_ruby_task_context_new(VALUE klass, VALUE _name, VALUE use_nam
 {
     std::string name = StringValuePtr(_name);
     LocalRubyTaskContext* ruby_task = new LocalRubyTaskContext(name);
-#if RTT_VERSION_GTE(2,8,99)
-    ruby_task->addConstant<int>("CorbaDispatcherScheduler", ORO_SCHED_OTHER);
-    ruby_task->addConstant<int>("CorbaDispatcherPriority", RTT::os::LowestPriority);
-#else
-    RTT::corba::CorbaDispatcher::Instance(ruby_task->ports(), ORO_SCHED_OTHER, RTT::os::LowestPriority);
-#endif
 
     RTT::corba::TaskContextServer::Create(ruby_task, RTEST(use_naming));
 
@@ -590,7 +583,6 @@ VALUE component_loader_create_local_task_context(VALUE self, VALUE instance_name
     if (!tc) {
         rb_raise(rb_eArgError, "could not create a task of type %s", StringValuePtr(type_name));
     }
-    RTT::corba::CorbaDispatcher::Instance(tc->ports(), ORO_SCHED_OTHER, RTT::os::LowestPriority);
     RTT::corba::TaskContextServer::Create(tc, RTEST(use_naming));
 
     VALUE rlocal_ruby_task = Data_Wrap_Struct(cLocalTaskContext, 0, delete_local_task_context, new RLocalTaskContext(tc));
@@ -600,6 +592,9 @@ VALUE component_loader_create_local_task_context(VALUE self, VALUE instance_name
 
 void Orocos_init_ruby_task_context(VALUE mOrocos, VALUE cTaskContext, VALUE cOutputPort, VALUE cInputPort)
 {
+    RTT::corba::CorbaDispatcher::defaultScheduler = ORO_SCHED_OTHER;
+    RTT::corba::CorbaDispatcher::defaultPriority = RTT::os::LowestPriority;
+
     VALUE mRubyTasks = rb_define_module_under(mOrocos, "RubyTasks");
     cRubyTaskContext = rb_define_class_under(mRubyTasks, "TaskContext", cTaskContext);
     cLocalRubyTaskContext = rb_define_class_under(cRubyTaskContext, "LocalRubyTaskContext", rb_cObject);
@@ -633,4 +628,3 @@ void Orocos_init_ruby_task_context(VALUE mOrocos, VALUE cTaskContext, VALUE cOut
     rb_define_method(cLocalInputPort, "do_read", RUBY_METHOD_FUNC(local_input_port_read), 4);
     rb_define_method(cLocalInputPort, "do_clear", RUBY_METHOD_FUNC(local_input_port_clear), 0);
 }
-
