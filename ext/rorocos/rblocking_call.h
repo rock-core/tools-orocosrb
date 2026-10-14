@@ -5,9 +5,10 @@
 //
 #include <boost/function.hpp>
 #include <boost/function_types/result_type.hpp>
-#include <boost/bind.hpp>
+#include <boost/bind/bind.hpp>
 #define RUBY_DONT_SUBST
 #include <ruby.h>
+#undef memcpy
 #include <ruby/thread.h>
 #include <stdarg.h>
 #include "rorocos.hh"

@@ -1,4 +1,6 @@
+#define RUBY_DONT_SUBST
 #include <ruby.h>
+#undef memcpy
 #include <rtt/transports/ros/RosLib.hpp>
 #include <ros/ros.h>
 
